@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       .map((row: string[]) => row.join('\t'))
       .join('\n')
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const prompt = `당신은 광고 데이터 분석 전문가입니다. 스프레드시트의 헤더와 샘플 데이터를 보고, 각 컬럼이 무엇을 의미하는지 해석해주세요.
 
