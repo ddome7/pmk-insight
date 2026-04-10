@@ -23,24 +23,39 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  // IMPORTANT: Use getUser() instead of getSession().
+  // getUser() sends a request to the Supabase Auth server every time to revalidate.
+  // getSession() only reads from the JWT which can be stale/tampered.
+  const { data: { user } } = await supabase.auth.getUser()
+
   const { pathname } = request.nextUrl
 
-  if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
-    if (session && pathname.startsWith('/login')) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard'
-      return NextResponse.redirect(url)
-    }
+  // Allow auth callback and login pages through
+  if (pathname.startsWith('/auth')) {
     return supabaseResponse
   }
 
-  if (!session) {
+  // If logged in and on login page, redirect to dashboard
+  if (pathname.startsWith('/login') && user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/dashboard'
+    return NextResponse.redirect(url)
+  }
+
+  // Allow login page through
+  if (pathname.startsWith('/login')) {
+    return supabaseResponse
+  }
+
+  // Not logged in -> redirect to login
+  if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
+  // IMPORTANT: Always return supabaseResponse, not NextResponse.next().
+  // supabaseResponse carries the updated cookies from setAll().
   return supabaseResponse
 }
 

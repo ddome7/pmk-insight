@@ -3,10 +3,14 @@ import { redirect } from 'next/navigation'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!session) redirect('/login')
-  const user = session.user
+  // Use getUser() instead of getSession() for reliable server-side auth check.
+  // getUser() validates the token with the Supabase Auth server.
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    redirect('/login')
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
