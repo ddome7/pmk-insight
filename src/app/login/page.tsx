@@ -9,7 +9,7 @@ export default function LoginPage() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        scopes: 'openid email profile https://www.googleapis.com/auth/spreadsheets.readonly',
+        scopes: 'openid email profile',
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
