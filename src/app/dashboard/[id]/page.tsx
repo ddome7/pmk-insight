@@ -86,15 +86,9 @@ export default function AdvertiserInsightPage({
         return
       }
 
-      // 클라이언트에서 직접 provider_token 획득
+      // provider_token 획득 시도 (로그인 직후에만 유효, 새로고침 후 null 가능)
       const { data: { session } } = await supabase.auth.getSession()
-      const providerToken = session?.provider_token
-
-      if (!providerToken) {
-        setSheetError('Google 인증 토큰이 없습니다. 로그아웃 후 다시 로그인해주세요.')
-        setFetchingSheet(false)
-        return
-      }
+      const providerToken = session?.provider_token || null
 
       const response = await fetch('/api/sheets', {
         method: 'POST',
@@ -105,7 +99,7 @@ export default function AdvertiserInsightPage({
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         const msg = errorData?.error || response.statusText
-        setSheetError(`시트 데이터를 가져올 수 없습니다: ${msg}`)
+        setSheetError(msg)
         setFetchingSheet(false)
         return
       }
