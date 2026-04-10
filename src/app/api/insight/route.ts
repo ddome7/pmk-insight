@@ -24,15 +24,15 @@ export async function POST(request: Request) {
     const headers: string[] = sheetData[0]
     const dataRows: string[][] = sheetData.slice(1)
 
-    // Limit data to prevent token overflow - send last 30 rows (most recent)
-    const recentRows = dataRows.slice(-30)
+    // Limit data to prevent token overflow - send last 10 rows (most recent)
+    const recentRows = dataRows.slice(-10)
 
     const columnDesc = (columnInterpretation as ColumnInterpretation[])
       .map((c) => `- ${c.column} (${c.type}): ${c.description}`)
       .join('\n')
 
     const dataPreview = [headers, ...recentRows]
-      .map((row: string[]) => row.join('\t'))
+      .map((row: string[]) => row.map((cell: string) => (cell?.length > 100 ? cell.slice(0, 100) + '…' : cell)).join('\t'))
       .join('\n')
 
     const completion = await groq.chat.completions.create({
