@@ -23,9 +23,24 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // getUser()를 호출해야 세션 토큰이 갱신된다
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/auth')) {
+  const { pathname } = request.nextUrl
+
+  // 인증 불필요 경로
+  if (pathname.startsWith('/login') || pathname.startsWith('/auth')) {
+    // 이미 로그인된 사용자가 /login에 접근하면 dashboard로
+    if (user && pathname.startsWith('/login')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  // 미인증 사용자는 로그인으로
+  if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
