@@ -1,15 +1,18 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { useSearchParams } from 'next/navigation'
+import { Suspense } from 'react'
 
-export default function LoginPage() {
+function LoginForm() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  const error = searchParams.get('error')
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        scopes: 'openid email profile',
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
@@ -22,6 +25,11 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-white">PMK Insight</h1>
           <p className="text-gray-400 mt-2 text-sm">광고주 데일리 인사이트 자동 도출 시스템</p>
         </div>
+        {error && (
+          <p className="text-red-400 text-xs text-center">
+            로그인에 실패했습니다. 다시 시도해주세요.
+          </p>
+        )}
         <button
           onClick={handleGoogleLogin}
           className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 font-medium py-3 px-6 rounded-xl hover:bg-gray-100 transition-colors"
@@ -39,5 +47,17 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-white text-sm">로딩 중...</div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }
