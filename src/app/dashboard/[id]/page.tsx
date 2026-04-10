@@ -135,7 +135,8 @@ export default function AdvertiserInsightPage({
       })
 
       if (!response.ok) {
-        throw new Error('컬럼 해석에 실패했습니다.')
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData?.error || '컬럼 해석에 실패했습니다.')
       }
 
       const data = await response.json()
