@@ -1,6 +1,6 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import Groq from 'groq-sdk'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 interface ColumnInterpretation {
   column: string
@@ -21,8 +21,6 @@ export async function POST(request: Request) {
 
     const headers: string[] = sheetData[0]
     const dataRows: string[][] = sheetData.slice(1)
-
-    // Limit data to prevent token overflow - send last 10 rows (most recent)
     const recentRows = dataRows.slice(-10)
 
     const columnDesc = (columnInterpretation as ColumnInterpretation[])
@@ -33,54 +31,63 @@ export async function POST(request: Request) {
       .map((row: string[]) => row.map((cell: string) => (cell?.length > 100 ? cell.slice(0, 100) + '…' : cell)).join('\t'))
       .join('\n')
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [
+        {
+          role: 'system',
+          content: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트를 제공합니다.
 
-    const prompt = `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 보고 단순한 수치 변화가 아닌, 실제 비즈니스에 의미 있는 인사이트를 도출합니다.
+[절대 금지]
+- "A 수치가 B로 변했습니다" 같은 단순 수치 나열
+- 데이터에 없는 내용 추측
+- 모호한 표현 ("개선이 필요합니다", "주목할 필요가 있습니다")
 
-[분석 원칙]
-- 수치 변동 나열 금지. "A가 B로 줄었습니다"는 인사이트가 아닙니다.
-- 왜(Why) 이 현상이 일어났는지, 무엇이 문제/기회인지를 해석하세요.
-- 데이터에서 보이는 패턴, 이상 징후, 놓치고 있는 기회를 찾으세요.
-- 전체 캠페인 건강도, 효율성, 리스크를 종합 판단하세요.
-- 광고주가 매니저에게 "그래서 어떻게 해야 해요?"라고 물었을 때 답이 되는 인사이트여야 합니다.
+[반드시 포함]
+- 수치 변화의 원인 해석 (왜 이런 결과가 나왔는지)
+- 캠페인 효율성 판단 (현재 광고가 잘 되고 있는지, 문제가 있는지)
+- 놓치고 있는 기회 또는 즉시 대응해야 할 위험 신호
+- 매니저가 광고주에게 보고할 때 바로 쓸 수 있는 문장 수준
 
-[인사이트 예시 - 좋음]
-"유료 전환율이 지속적으로 하락 중이며, 회원가입 대비 구독 전환율이 20% 미만으로 떨어졌습니다. 유입은 유지되고 있으나 온보딩 또는 결제 단계에서 이탈이 발생하고 있을 가능성이 높습니다."
+[Next Step 기준]
+- 오늘 또는 이번 주 안에 실행 가능한 구체적 액션
+- "검토해보세요" 금지, "~를 ~% 늘리세요" 수준의 구체성
 
-[인사이트 예시 - 나쁨 (금지)]
-"전일 대비 회원가입 수는 45건 감소하였습니다."
-
-반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
+반드시 아래 JSON 형식으로만 응답하세요:
 
 {
   "insights": [
-    "인사이트 1 (원인과 비즈니스 의미 포함)",
+    "인사이트 1",
     "인사이트 2",
     "인사이트 3"
   ],
   "nextSteps": [
-    "구체적이고 즉시 실행 가능한 액션 1",
+    "액션 1",
     "액션 2",
     "액션 3"
   ]
 }
 
-인사이트는 3~5개, Next Step은 정확히 3개. 모두 한국어로 작성하세요.
+인사이트 3~5개, Next Step 정확히 3개. 모두 한국어.`,
+        },
+        {
+          role: 'user',
+          content: `광고주명: ${advertiserName || '미지정'}
 
----
-
-광고주명: ${advertiserName || '미지정'}
-
-컬럼 해석:
+[컬럼 정의]
 ${columnDesc}
 
-데이터 (최근 ${recentRows.length}행):
+[데이터 - 최근 ${recentRows.length}행]
 ${dataPreview}
 
-위 데이터를 분석하고 인사이트와 Next Step을 JSON으로 제시해주세요.`
+이 데이터를 바탕으로 광고 성과 인사이트와 Next Step을 JSON으로 제시해주세요.`,
+        },
+      ],
+      temperature: 0.2,
+      max_tokens: 2048,
+    })
 
-    const result = await model.generateContent(prompt)
-    const content = result.response.text()
+    const content = completion.choices[0]?.message?.content || ''
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
@@ -92,7 +99,6 @@ ${dataPreview}
 
     const parsed = JSON.parse(jsonMatch[0])
 
-    // Validate structure
     if (!Array.isArray(parsed.insights) || !Array.isArray(parsed.nextSteps)) {
       return Response.json(
         { error: 'AI 응답 형식이 올바르지 않습니다.' },
