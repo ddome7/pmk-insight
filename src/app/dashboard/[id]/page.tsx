@@ -79,15 +79,6 @@ export default function AdvertiserInsightPage({
     setSheetError('')
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const providerToken = session?.provider_token
-
-      if (!providerToken) {
-        setSheetError('Google 인증 토큰이 없습니다. 로그아웃 후 다시 로그인해주세요.')
-        setFetchingSheet(false)
-        return
-      }
-
       const spreadsheetId = extractSpreadsheetId(advertiser.sheet_url)
       if (!spreadsheetId) {
         setSheetError('올바르지 않은 스프레드시트 URL입니다.')
@@ -95,18 +86,15 @@ export default function AdvertiserInsightPage({
         return
       }
 
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:Z100`,
-        {
-          headers: {
-            Authorization: `Bearer ${providerToken}`,
-          },
-        }
-      )
+      const response = await fetch('/api/sheets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheetId }),
+      })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        const msg = errorData?.error?.message || response.statusText
+        const msg = errorData?.error || response.statusText
         setSheetError(`시트 데이터를 가져올 수 없습니다: ${msg}`)
         setFetchingSheet(false)
         return
@@ -126,7 +114,7 @@ export default function AdvertiserInsightPage({
       setSheetError(`오류가 발생했습니다: ${err instanceof Error ? err.message : String(err)}`)
     }
     setFetchingSheet(false)
-  }, [advertiser, supabase])
+  }, [advertiser])
 
   const interpretColumns = useCallback(async () => {
     if (!sheetData || sheetData.length < 2) return
