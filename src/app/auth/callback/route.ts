@@ -28,11 +28,14 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
-      return redirectTo
+    if (error) {
+      console.error('Auth callback error:', error.message)
+      return NextResponse.redirect(`${origin}/auth/callback?error=${error.message}`)
     }
+
+    return redirectTo
   }
 
-  // code가 없거나 교환 실패 시 로그인 페이지로
-  return NextResponse.redirect(`${new URL(request.url).origin}/login?error=auth_failed`)
+  // code 없으면 클라이언트 페이지로 (implicit flow fallback)
+  return NextResponse.next()
 }
