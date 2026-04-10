@@ -74,6 +74,13 @@ export default function DashboardPage() {
     loadFolders()
   }
 
+  const handleDeleteAdvertiser = async (e: React.MouseEvent, advertiserId: string) => {
+    e.stopPropagation()
+    if (!confirm('광고주를 삭제하시겠습니까?')) return
+    await supabase.from('advertisers').delete().eq('id', advertiserId)
+    loadAdvertisers()
+  }
+
   const handleDeleteFolder = async (folderId: string) => {
     if (!confirm('폴더를 삭제하시겠습니까? 폴더 안의 광고주는 미분류로 이동됩니다.')) return
     await supabase
@@ -288,6 +295,12 @@ export default function DashboardPage() {
                       {folders.find(f => f.id === adv.folder_id)?.name}
                     </span>
                   )}
+                  <button
+                    onClick={(e) => handleDeleteAdvertiser(e, adv.id)}
+                    className="text-xs text-gray-600 hover:text-red-400 transition-colors mt-1"
+                  >
+                    삭제
+                  </button>
                 </div>
               </div>
               <p className="text-xs text-gray-600 truncate">{adv.sheet_url}</p>
