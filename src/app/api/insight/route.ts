@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       .map((row: string[]) => row.map((cell: string) => (cell?.length > 100 ? cell.slice(0, 100) + '…' : cell)).join('\t'))
       .join('\n')
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const prompt = `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 보고 단순한 수치 변화가 아닌, 실제 비즈니스에 의미 있는 인사이트를 도출합니다.
 
