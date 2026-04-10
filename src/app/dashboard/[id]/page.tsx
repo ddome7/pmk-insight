@@ -162,7 +162,8 @@ export default function AdvertiserInsightPage({
       })
 
       if (!response.ok) {
-        throw new Error('인사이트 생성에 실패했습니다.')
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData?.error || '인사이트 생성에 실패했습니다.')
       }
 
       const data = await response.json()
