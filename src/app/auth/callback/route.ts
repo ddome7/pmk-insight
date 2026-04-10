@@ -1,5 +1,4 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -8,7 +7,12 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    const cookieStore = await cookies()
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const redirectUrl = forwardedHost
+      ? `https://${forwardedHost}${next}`
+      : `${origin}${next}`
+
+    const redirectTo = NextResponse.redirect(redirectUrl)
 
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,17 +20,12 @@ export async function GET(request: NextRequest) {
       {
         cookies: {
           getAll() {
-            return cookieStore.getAll()
+            return request.cookies.getAll()
           },
           setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              )
-            } catch {
-              // setAll은 Server Component에서 호출 시 에러가 날 수 있으나
-              // Route Handler에서는 정상 동작한다
-            }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              redirectTo.cookies.set(name, value, options)
+            })
           },
         },
       }
@@ -35,19 +34,9 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
-      const forwardedHost = request.headers.get('x-forwarded-host')
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-
-      if (isLocalEnv) {
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
-      } else {
-        return NextResponse.redirect(`${origin}${next}`)
-      }
+      return redirectTo
     }
   }
 
-  // 코드 교환 실패 시 로그인 페이지로 리다이렉트 (에러 표시)
   return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
 }
