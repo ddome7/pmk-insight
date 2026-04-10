@@ -1,8 +1,6 @@
-import Groq from 'groq-sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
-})
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
 interface ColumnInterpretation {
   column: string
@@ -35,12 +33,9 @@ export async function POST(request: Request) {
       .map((row: string[]) => row.map((cell: string) => (cell?.length > 100 ? cell.slice(0, 100) + '…' : cell)).join('\t'))
       .join('\n')
 
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        {
-          role: 'system',
-          content: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 보고 단순한 수치 변화가 아닌, 실제 비즈니스에 의미 있는 인사이트를 도출합니다.
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+
+    const prompt = `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 보고 단순한 수치 변화가 아닌, 실제 비즈니스에 의미 있는 인사이트를 도출합니다.
 
 [분석 원칙]
 - 수치 변동 나열 금지. "A가 B로 줄었습니다"는 인사이트가 아닙니다.
@@ -70,11 +65,11 @@ export async function POST(request: Request) {
   ]
 }
 
-인사이트는 3~5개, Next Step은 정확히 3개. 모두 한국어로 작성하세요.`,
-        },
-        {
-          role: 'user',
-          content: `광고주명: ${advertiserName || '미지정'}
+인사이트는 3~5개, Next Step은 정확히 3개. 모두 한국어로 작성하세요.
+
+---
+
+광고주명: ${advertiserName || '미지정'}
 
 컬럼 해석:
 ${columnDesc}
@@ -82,14 +77,10 @@ ${columnDesc}
 데이터 (최근 ${recentRows.length}행):
 ${dataPreview}
 
-위 데이터를 분석하고 인사이트와 Next Step을 JSON으로 제시해주세요.`,
-        },
-      ],
-      temperature: 0.3,
-      max_tokens: 4096,
-    })
+위 데이터를 분석하고 인사이트와 Next Step을 JSON으로 제시해주세요.`
 
-    const content = completion.choices[0]?.message?.content || ''
+    const result = await model.generateContent(prompt)
+    const content = result.response.text()
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
