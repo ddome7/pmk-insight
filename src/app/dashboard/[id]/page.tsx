@@ -45,6 +45,12 @@ export default function AdvertiserInsightPage({
   const [chatInput, setChatInput] = useState('')
   const [step, setStep] = useState<'idle' | 'fetching' | 'interpreting' | 'generating' | 'done'>('idle')
 
+  const toDateStr = (d: Date) => d.toISOString().split('T')[0]
+  const yesterday = toDateStr(new Date(Date.now() - 86400000))
+  const dayBeforeYesterday = toDateStr(new Date(Date.now() - 86400000 * 2))
+  const [analysisDate, setAnalysisDate] = useState(yesterday)
+  const [compareDate, setCompareDate] = useState(dayBeforeYesterday)
+
   useEffect(() => {
     loadAdvertiser()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +165,8 @@ export default function AdvertiserInsightPage({
           sheetData,
           columnInterpretation,
           advertiserName: advertiser?.advertiser_name,
+          analysisDate,
+          compareDate,
         }),
       })
 
@@ -264,6 +272,31 @@ export default function AdvertiserInsightPage({
             </a>
           </div>
           <p className="text-xs text-gray-600 mt-3 truncate">{advertiser.sheet_url}</p>
+        </div>
+
+        {/* Date Selection */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
+          <h3 className="text-sm font-medium text-gray-400 mb-4">분석 기간 설정</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 mb-1.5 block">분석일자</label>
+              <input
+                type="date"
+                value={analysisDate}
+                onChange={(e) => setAnalysisDate(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1.5 block">비교일자</label>
+              <input
+                type="date"
+                value={compareDate}
+                onChange={(e) => setCompareDate(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Generate Insight Button */}

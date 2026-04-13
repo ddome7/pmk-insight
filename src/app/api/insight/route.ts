@@ -10,7 +10,7 @@ interface ColumnInterpretation {
 
 export async function POST(request: Request) {
   try {
-    const { sheetData, columnInterpretation, advertiserName } = await request.json()
+    const { sheetData, columnInterpretation, advertiserName, analysisDate, compareDate } = await request.json()
 
     if (!sheetData || !columnInterpretation) {
       return Response.json(
@@ -71,14 +71,21 @@ export async function POST(request: Request) {
         {
           role: 'user',
           content: `광고주명: ${advertiserName || '미지정'}
+분석일자: ${analysisDate || '미지정'}
+비교일자: ${compareDate || '미지정'}
+
+[분석 방법]
+- 분석일자(${analysisDate}) 데이터를 기준으로 성과를 평가하세요.
+- 비교일자(${compareDate}) 데이터와 비교하여 변화를 해석하세요.
+- 날짜 컬럼을 찾아 해당 날짜의 행만 집중 분석하고, 그 외 데이터는 트렌드 파악에 참고하세요.
 
 [컬럼 정의]
 ${columnDesc}
 
-[데이터 - 최근 ${recentRows.length}행]
+[전체 데이터 - 최근 ${recentRows.length}행]
 ${dataPreview}
 
-이 데이터를 바탕으로 광고 성과 인사이트와 Next Step을 JSON으로 제시해주세요.`,
+위 데이터에서 분석일자와 비교일자를 찾아 비교 분석하고, 인사이트와 Next Step을 JSON으로 제시해주세요.`,
         },
       ],
     })
