@@ -3,6 +3,9 @@
 import { use, useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import DatePicker from 'react-datepicker'
+import 'react-datepicker/dist/react-datepicker.css'
+import { ko } from 'date-fns/locale'
 
 interface Advertiser {
   id: string
@@ -46,12 +49,10 @@ export default function AdvertiserInsightPage({
   const [step, setStep] = useState<'idle' | 'fetching' | 'interpreting' | 'generating' | 'done'>('idle')
 
   const toDateStr = (d: Date) => d.toISOString().split('T')[0]
-  const yesterday = toDateStr(new Date(Date.now() - 86400000))
-  const dayBeforeYesterday = toDateStr(new Date(Date.now() - 86400000 * 2))
-  const [analysisStart, setAnalysisStart] = useState(yesterday)
-  const [analysisEnd, setAnalysisEnd] = useState(yesterday)
-  const [compareStart, setCompareStart] = useState(dayBeforeYesterday)
-  const [compareEnd, setCompareEnd] = useState(dayBeforeYesterday)
+  const [analysisStart, setAnalysisStart] = useState<Date>(new Date(Date.now() - 86400000))
+  const [analysisEnd, setAnalysisEnd] = useState<Date>(new Date(Date.now() - 86400000))
+  const [compareStart, setCompareStart] = useState<Date>(new Date(Date.now() - 86400000 * 2))
+  const [compareEnd, setCompareEnd] = useState<Date>(new Date(Date.now() - 86400000 * 2))
 
   useEffect(() => {
     loadAdvertiser()
@@ -167,10 +168,10 @@ export default function AdvertiserInsightPage({
           sheetData,
           columnInterpretation,
           advertiserName: advertiser?.advertiser_name,
-          analysisStart,
-          analysisEnd,
-          compareStart,
-          compareEnd,
+          analysisStart: toDateStr(analysisStart),
+          analysisEnd: toDateStr(analysisEnd),
+          compareStart: toDateStr(compareStart),
+          compareEnd: toDateStr(compareEnd),
         }),
       })
 
@@ -285,38 +286,58 @@ export default function AdvertiserInsightPage({
             <div>
               <label className="text-xs text-blue-400 font-medium mb-2 block">기준 기간</label>
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={analysisStart}
-                  onChange={(e) => setAnalysisStart(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                <DatePicker
+                  selected={analysisStart}
+                  onChange={(date) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }}
+                  selectsStart
+                  startDate={analysisStart}
+                  endDate={analysisEnd}
+                  locale={ko}
+                  dateFormat="yyyy.MM.dd"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  calendarClassName="dark-calendar"
                 />
-                <span className="text-gray-600 text-xs">~</span>
-                <input
-                  type="date"
-                  value={analysisEnd}
-                  min={analysisStart}
-                  onChange={(e) => setAnalysisEnd(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                <span className="text-gray-600 text-xs flex-shrink-0">~</span>
+                <DatePicker
+                  selected={analysisEnd}
+                  onChange={(date) => { if (date) setAnalysisEnd(date) }}
+                  selectsEnd
+                  startDate={analysisStart}
+                  endDate={analysisEnd}
+                  minDate={analysisStart}
+                  locale={ko}
+                  dateFormat="yyyy.MM.dd"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  calendarClassName="dark-calendar"
                 />
               </div>
             </div>
             <div>
               <label className="text-xs text-gray-400 font-medium mb-2 block">비교 기간</label>
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={compareStart}
-                  onChange={(e) => setCompareStart(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                <DatePicker
+                  selected={compareStart}
+                  onChange={(date) => { if (date) { setCompareStart(date); if (date > compareEnd) setCompareEnd(date) } }}
+                  selectsStart
+                  startDate={compareStart}
+                  endDate={compareEnd}
+                  locale={ko}
+                  dateFormat="yyyy.MM.dd"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  calendarClassName="dark-calendar"
                 />
-                <span className="text-gray-600 text-xs">~</span>
-                <input
-                  type="date"
-                  value={compareEnd}
-                  min={compareStart}
-                  onChange={(e) => setCompareEnd(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                <span className="text-gray-600 text-xs flex-shrink-0">~</span>
+                <DatePicker
+                  selected={compareEnd}
+                  onChange={(date) => { if (date) setCompareEnd(date) }}
+                  selectsEnd
+                  startDate={compareStart}
+                  endDate={compareEnd}
+                  minDate={compareStart}
+                  locale={ko}
+                  dateFormat="yyyy.MM.dd"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  calendarClassName="dark-calendar"
                 />
               </div>
             </div>
