@@ -65,6 +65,8 @@ export default function DashboardPage() {
   const [showMatchingView, setShowMatchingView] = useState(false)
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [folderBreadcrumb, setFolderBreadcrumb] = useState<Folder[]>([])
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null)
+  const [editingFolderName, setEditingFolderName] = useState('')
   const [isAdmin, setIsAdmin] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('pmk_isAdmin') === 'true'
     return false
@@ -243,6 +245,22 @@ export default function DashboardPage() {
     loadFolders()
   }
 
+  const startEditingFolder = (e: React.MouseEvent, folder: Folder) => {
+    e.stopPropagation()
+    setEditingFolderId(folder.id)
+    setEditingFolderName(folder.name)
+  }
+
+  const commitFolderRename = async (folderId: string) => {
+    const trimmed = editingFolderName.trim()
+    if (trimmed && trimmed !== folders.find(f => f.id === folderId)?.name) {
+      await supabase.from('folders').update({ name: trimmed }).eq('id', folderId)
+      loadFolders()
+    }
+    setEditingFolderId(null)
+    setEditingFolderName('')
+  }
+
   const handleDeleteFolder = async (folderId: string) => {
     if (!confirm('폴더를 삭제하시겠습니까? 폴더 안의 광고주는 미분류로 이동됩니다.')) return
     await supabase
@@ -339,7 +357,7 @@ export default function DashboardPage() {
     { bg: 'bg-purple-950', border: 'border-purple-800', text: 'text-purple-300' },
     { bg: 'bg-emerald-950', border: 'border-emerald-800', text: 'text-emerald-300' },
     { bg: 'bg-amber-950', border: 'border-amber-800', text: 'text-amber-300' },
-    { bg: 'bg-rose-950', border: 'border-rose-800', text: 'text-rose-300' },
+    { bg: 'bg-violet-950', border: 'border-violet-800', text: 'text-violet-300' },
     { bg: 'bg-cyan-950', border: 'border-cyan-800', text: 'text-cyan-300' },
     { bg: 'bg-orange-950', border: 'border-orange-800', text: 'text-orange-300' },
     { bg: 'bg-teal-950', border: 'border-teal-800', text: 'text-teal-300' },
@@ -589,25 +607,52 @@ export default function DashboardPage() {
                         여기에 넣기
                       </span>
                     )}
-                    <button onClick={() => navigateToFolder(folder)} className="px-4 py-3 flex items-center gap-1.5">
-                      {subCount > 0 ? '📁' : '🗂️'} {folder.name} ({getFolderCount(folder.id)})
-                      {subCount > 0 && <span className="text-xs text-gray-400">+{subCount}</span>}
-                    </button>
-                    {currentFolderId !== null && (
-                      <button
-                        onClick={(e) => handleUnparentFolder(e, folder.id)}
-                        className="text-gray-500 hover:text-orange-400 transition-colors text-xs px-1"
-                        title="상위 폴더로 이동"
-                      >
-                        ↑
+                    {editingFolderId === folder.id ? (
+                      <div className="flex items-center gap-1 px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          autoFocus
+                          value={editingFolderName}
+                          onChange={(e) => setEditingFolderName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') commitFolderRename(folder.id)
+                            if (e.key === 'Escape') { setEditingFolderId(null); setEditingFolderName('') }
+                          }}
+                          onBlur={() => commitFolderRename(folder.id)}
+                          className="bg-gray-800 text-white rounded px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500 w-28"
+                        />
+                      </div>
+                    ) : (
+                      <button onClick={() => navigateToFolder(folder)} className="px-4 py-3 flex items-center gap-1.5">
+                        {subCount > 0 ? '📁' : '🗂️'} {folder.name} ({getFolderCount(folder.id)})
+                        {subCount > 0 && <span className="text-xs text-gray-400">+{subCount}</span>}
                       </button>
                     )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
-                      className="pr-2 text-gray-500 hover:text-red-400 transition-colors"
-                    >
-                      x
-                    </button>
+                    {editingFolderId !== folder.id && (
+                      <>
+                        <button
+                          onClick={(e) => startEditingFolder(e, folder)}
+                          className="text-gray-500 hover:text-blue-400 transition-colors text-xs px-1"
+                          title="폴더명 수정"
+                        >
+                          ✎
+                        </button>
+                        {currentFolderId !== null && (
+                          <button
+                            onClick={(e) => handleUnparentFolder(e, folder.id)}
+                            className="text-gray-500 hover:text-orange-400 transition-colors text-xs px-1"
+                            title="상위 폴더로 이동"
+                          >
+                            ↑
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
+                          className="pr-2 text-gray-500 hover:text-red-400 transition-colors"
+                        >
+                          x
+                        </button>
+                      </>
+                    )}
                   </div>
                 )
               })
