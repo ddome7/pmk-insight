@@ -370,6 +370,12 @@ export default function DashboardPage() {
     return FOLDER_COLORS[Math.abs(hash) % FOLDER_COLORS.length]
   }
 
+  const getRootFolderId = (folderId: string): string => {
+    const folder = folders.find(f => f.id === folderId)
+    if (!folder || !folder.parent_id) return folderId
+    return getRootFolderId(folder.parent_id)
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
@@ -752,7 +758,7 @@ export default function DashboardPage() {
           {filteredAdvertisers.map(adv => {
             const isOwn = adv.user_id === user?.id
             const hasControl = isOwn || isAdmin
-            const folderColor = adv.folder_id ? getFolderColor(adv.folder_id) : null
+            const folderColor = adv.folder_id ? getFolderColor(getRootFolderId(adv.folder_id)) : null
             return (
               <div
                 key={adv.id}
