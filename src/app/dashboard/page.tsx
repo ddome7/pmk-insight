@@ -752,6 +752,7 @@ export default function DashboardPage() {
           {filteredAdvertisers.map(adv => {
             const isOwn = adv.user_id === user?.id
             const hasControl = isOwn || isAdmin
+            const folderColor = adv.folder_id ? getFolderColor(adv.folder_id) : null
             return (
               <div
                 key={adv.id}
@@ -762,11 +763,13 @@ export default function DashboardPage() {
                 className={`border rounded-lg p-3 cursor-pointer transition-all ${
                   draggingAdvertiserId === adv.id
                     ? 'opacity-40 scale-95 bg-gray-800 border-gray-700'
-                    : isOwn
-                      ? 'bg-gray-900 border-gray-800 hover:border-gray-600'
-                      : isAdmin
-                        ? 'bg-gray-900 border-amber-900/40 hover:border-amber-700/60'
-                        : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
+                    : folderColor
+                      ? `bg-gray-900 ${folderColor.border} hover:brightness-125`
+                      : isOwn
+                        ? 'bg-gray-900 border-gray-800 hover:border-gray-600'
+                        : isAdmin
+                          ? 'bg-gray-900 border-gray-700 hover:border-gray-500'
+                          : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
