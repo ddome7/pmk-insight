@@ -32,6 +32,8 @@ export default function DashboardPage() {
   const [newFolderName, setNewFolderName] = useState('')
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
+  const [folderOrder, setFolderOrder] = useState<string[]>([])
+  const [draggingFolderId, setDraggingFolderId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -56,7 +58,18 @@ export default function DashboardPage() {
       .from('folders')
       .select('*')
       .order('created_at', { ascending: true })
-    if (data) setFolders(data)
+    if (data) {
+      setFolders(data)
+      const saved = localStorage.getItem('folderOrder')
+      if (saved) {
+        const savedOrder: string[] = JSON.parse(saved)
+        const validOrder = savedOrder.filter(id => data.some(f => f.id === id))
+        const newIds = data.map(f => f.id).filter(id => !validOrder.includes(id))
+        setFolderOrder([...validOrder, ...newIds])
+      } else {
+        setFolderOrder(data.map(f => f.id))
+      }
+    }
   }
 
   const handleCreateFolder = async () => {
@@ -104,6 +117,31 @@ export default function DashboardPage() {
     e.dataTransfer.effectAllowed = 'move'
   }, [])
 
+  const handleFolderDragStart = useCallback((e: React.DragEvent, folderId: string) => {
+    e.dataTransfer.setData('folder/id', folderId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggingFolderId(folderId)
+  }, [])
+
+  const handleFolderDrop = useCallback((e: React.DragEvent, targetFolderId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const draggedId = e.dataTransfer.getData('folder/id')
+    if (!draggedId || draggedId === targetFolderId) { setDraggingFolderId(null); return }
+
+    setFolderOrder(prev => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedId)
+      const toIdx = next.indexOf(targetFolderId)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedId)
+      localStorage.setItem('folderOrder', JSON.stringify(next))
+      return next
+    })
+    setDraggingFolderId(null)
+  }, [])
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
@@ -141,6 +179,10 @@ export default function DashboardPage() {
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  const sortedFolders = folderOrder.length > 0
+    ? folderOrder.map(id => folders.find(f => f.id === id)).filter(Boolean) as typeof folders
+    : folders
 
   const filteredAdvertisers = selectedFolderId
     ? advertisers.filter(a => a.folder_id === selectedFolderId)
@@ -196,20 +238,28 @@ export default function DashboardPage() {
             </button>
 
             {/* Folder tabs */}
-            {folders.map(folder => (
+            {sortedFolders.map(folder => (
               <div
                 key={folder.id}
-                className={`flex items-center gap-1 rounded-xl text-sm font-medium transition-colors border ${
-                  selectedFolderId === folder.id
-                    ? 'bg-blue-600 border-blue-500 text-white'
-                    : dragOverFolderId === folder.id
-                      ? 'bg-gray-700 border-blue-400 text-white'
-                      : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
-                }`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDropOnFolder(e, folder.id)}
+                draggable
+                onDragStart={(e) => handleFolderDragStart(e, folder.id)}
+                onDragEnd={() => setDraggingFolderId(null)}
+                onDragOver={(e) => { e.preventDefault(); if (!draggingFolderId || draggingFolderId === folder.id) handleDragOver(e) }}
+                onDrop={(e) => {
+                  if (draggingFolderId) handleFolderDrop(e, folder.id)
+                  else handleDropOnFolder(e, folder.id)
+                }}
                 onDragEnter={() => setDragOverFolderId(folder.id)}
                 onDragLeave={() => setDragOverFolderId(null)}
+                className={`flex items-center gap-1 rounded-xl text-sm font-medium transition-colors border cursor-grab active:cursor-grabbing ${
+                  selectedFolderId === folder.id
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : draggingFolderId === folder.id
+                      ? 'opacity-40 bg-gray-800 border-gray-600 text-gray-400'
+                      : dragOverFolderId === folder.id && !draggingFolderId
+                        ? 'bg-gray-700 border-blue-400 text-white'
+                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
+                }`}
               >
                 <button
                   onClick={() => setSelectedFolderId(folder.id)}
