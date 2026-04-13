@@ -308,7 +308,7 @@ export default function DashboardPage() {
                     <span className="text-xs text-gray-500">그룹 : {folders.find(f => f.id === adv.folder_id)?.name}</span>
                     <button
                       onClick={(e) => handleUngroup(e, adv.id)}
-                      className="text-xs text-gray-500 hover:text-yellow-400 transition-colors flex-shrink-0 border border-gray-700 hover:border-yellow-400 rounded px-1.5 py-0.5"
+                      className="text-xs text-orange-400 hover:text-orange-300 transition-colors flex-shrink-0 border border-orange-800 hover:border-orange-400 rounded px-1.5 py-0.5"
                     >
                       그룹해제
                     </button>
