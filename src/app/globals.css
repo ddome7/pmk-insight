@@ -81,3 +81,9 @@ body {
 .react-datepicker-popper {
   z-index: 50 !important;
 }
+.dark-calendar .react-datepicker__day--today {
+  background-color: #064e3b !important;
+  color: #6ee7b7 !important;
+  font-weight: bold !important;
+  border: 1px solid #059669 !important;
+}
