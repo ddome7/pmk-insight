@@ -72,6 +72,9 @@ export default function AdvertiserInsightPage({
   const [step, setStep] = useState<'idle' | 'fetching' | 'interpreting' | 'generating' | 'done'>('idle')
   const [insightHistory, setInsightHistory] = useState<HistoryEntry[]>([])
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
+  const [showColumns, setShowColumns] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
+  const [copiedReport, setCopiedReport] = useState(false)
 
   // 패널 크기 조절
   const [rightPanelPct, setRightPanelPct] = useState(20)
@@ -433,286 +436,258 @@ export default function AdvertiserInsightPage({
 
       <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden select-none">
       <main className="overflow-y-auto px-6 py-10" style={{ width: `${100 - rightPanelPct}%` }}>
-        {/* Advertiser Info */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
-          <div className="flex items-start justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">{advertiser.advertiser_name}</h2>
-              <p className="text-sm text-gray-400 mt-1">담당자: {advertiser.manager_name}</p>
-            </div>
-            <a
-              href={advertiser.sheet_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors bg-gray-800 px-3 py-1.5 rounded-lg"
-            >
-              시트 열기
-            </a>
+        {/* Advertiser Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">{advertiser.advertiser_name}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">담당: {advertiser.manager_name}</p>
           </div>
-          <p className="text-xs text-gray-600 mt-3 truncate">{advertiser.sheet_url}</p>
+          <a
+            href={advertiser.sheet_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 bg-gray-900 px-3 py-1.5 rounded-lg"
+          >
+            시트 열기 ↗
+          </a>
         </div>
 
         {/* Date Selection */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-          <h3 className="text-sm font-medium text-gray-400 mb-4">기간 설정</h3>
-          <div className="grid grid-cols-2 gap-6">
-            {/* 비교 기간 - 먼저 */}
+        <div className="bg-gray-900/80 border border-gray-800 rounded-2xl p-5 mb-5">
+          <div className="grid grid-cols-2 gap-5">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <label className="text-xs text-gray-400 font-medium">비교 기간</label>
-                <span className="text-xs text-gray-600">
-                  {Math.round((compareEnd.getTime() - compareStart.getTime()) / 86400000) + 1}일 선택됨
-                </span>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-500 inline-block"/>
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">비교 기간</label>
+                <span className="text-xs text-gray-600">{Math.round((compareEnd.getTime() - compareStart.getTime()) / 86400000) + 1}일</span>
                 <button
                   onClick={handleWeekendToggle}
-                  className={`text-xs rounded px-2 py-0.5 border transition-colors cursor-pointer ${
+                  className={`ml-auto text-xs rounded-md px-2 py-0.5 border transition-colors cursor-pointer ${
                     weekendIncluded
-                      ? 'bg-emerald-900 text-emerald-300 border-emerald-700 hover:bg-emerald-700'
-                      : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-gray-200'
+                      ? 'bg-emerald-900 text-emerald-300 border-emerald-700'
+                      : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
                   }`}
-                >
-                  주말포함
-                </button>
+                >주말포함</button>
               </div>
               <div className="flex items-center gap-2">
-                <DatePicker
-                  selected={compareStart}
-                  onChange={(date: Date | null) => { if (date) { setCompareStart(date); if (date > compareEnd) setCompareEnd(date) } }}
-                  selectsStart
-                  startDate={compareStart}
-                  endDate={compareEnd}
-                  locale={ko}
-                  dateFormat="yyyy.MM.dd"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  calendarClassName="dark-calendar"
-                />
+                <DatePicker selected={compareStart} onChange={(date: Date | null) => { if (date) { setCompareStart(date); if (date > compareEnd) setCompareEnd(date) } }} selectsStart startDate={compareStart} endDate={compareEnd} locale={ko} dateFormat="yyyy.MM.dd" className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer" calendarClassName="dark-calendar" />
                 <span className="text-gray-600 text-xs flex-shrink-0">~</span>
-                <DatePicker
-                  selected={compareEnd}
-                  onChange={(date: Date | null) => { if (date) setCompareEnd(date) }}
-                  selectsEnd
-                  startDate={compareStart}
-                  endDate={compareEnd}
-                  minDate={compareStart}
-                  locale={ko}
-                  dateFormat="yyyy.MM.dd"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  calendarClassName="dark-calendar"
-                />
+                <DatePicker selected={compareEnd} onChange={(date: Date | null) => { if (date) setCompareEnd(date) }} selectsEnd startDate={compareStart} endDate={compareEnd} minDate={compareStart} locale={ko} dateFormat="yyyy.MM.dd" className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer" calendarClassName="dark-calendar" />
               </div>
             </div>
-            {/* 기준 기간 - 나중 + 동기간 버튼 */}
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <label className="text-xs text-blue-400 font-medium">기준 기간</label>
+              <div className="flex items-center gap-2 mb-2.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block"/>
+                <label className="text-xs font-medium text-blue-400 uppercase tracking-wider">기준 기간</label>
                 <button
                   onClick={() => {
                     const duration = Math.round((compareEnd.getTime() - compareStart.getTime()) / 86400000)
                     const yesterday = new Date(Date.now() - 86400000)
                     yesterday.setHours(0, 0, 0, 0)
-                    const start = new Date(yesterday.getTime() - duration * 86400000)
-                    setAnalysisStart(start)
+                    setAnalysisStart(new Date(yesterday.getTime() - duration * 86400000))
                     setAnalysisEnd(yesterday)
                   }}
-                  className="text-xs bg-blue-900 hover:bg-blue-700 text-blue-300 hover:text-white border border-blue-700 hover:border-blue-500 rounded px-2 py-0.5 transition-colors cursor-pointer"
-                >
-                  동기간 선택하기
-                </button>
+                  className="ml-auto text-xs bg-blue-950 hover:bg-blue-900 text-blue-400 border border-blue-800 rounded-md px-2 py-0.5 transition-colors cursor-pointer"
+                >동기간</button>
               </div>
               <div className="flex items-center gap-2">
-                <DatePicker
-                  selected={analysisStart}
-                  onChange={(date: Date | null) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }}
-                  selectsStart
-                  startDate={analysisStart}
-                  endDate={analysisEnd}
-                  locale={ko}
-                  dateFormat="yyyy.MM.dd"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  calendarClassName="dark-calendar"
-                />
+                <DatePicker selected={analysisStart} onChange={(date: Date | null) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }} selectsStart startDate={analysisStart} endDate={analysisEnd} locale={ko} dateFormat="yyyy.MM.dd" className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer" calendarClassName="dark-calendar" />
                 <span className="text-gray-600 text-xs flex-shrink-0">~</span>
-                <DatePicker
-                  selected={analysisEnd}
-                  onChange={handleAnalysisEndChange}
-                  selectsEnd
-                  startDate={analysisStart}
-                  endDate={analysisEnd}
-                  minDate={analysisStart}
-                  locale={ko}
-                  dateFormat="yyyy.MM.dd"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  calendarClassName="dark-calendar"
-                />
+                <DatePicker selected={analysisEnd} onChange={handleAnalysisEndChange} selectsEnd startDate={analysisStart} endDate={analysisEnd} minDate={analysisStart} locale={ko} dateFormat="yyyy.MM.dd" className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer" calendarClassName="dark-calendar" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Generate Insight Button */}
+        {/* Generate Button */}
         <div className="mb-8">
           <div className="flex gap-2">
             <button
               onClick={handleGenerateInsight}
               disabled={isProcessing}
-              className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-400 text-white font-medium rounded-xl transition-colors text-sm"
+              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-semibold rounded-xl transition-colors text-sm tracking-wide"
             >
-              {isProcessing ? getStepLabel() : (insightResult ? '인사이트 재생성' : '인사이트 생성')}
+              {isProcessing ? getStepLabel() : (insightResult ? '↺  인사이트 재생성' : '✦  인사이트 생성')}
             </button>
             {isProcessing && (
-              <button
-                onClick={handleAbort}
-                className="px-5 py-4 bg-red-900 hover:bg-red-800 border border-red-700 text-red-300 hover:text-white font-medium rounded-xl transition-colors text-sm flex-shrink-0"
-              >
+              <button onClick={handleAbort} className="px-5 bg-red-950 hover:bg-red-900 border border-red-800 text-red-400 hover:text-red-300 font-medium rounded-xl transition-colors text-sm">
                 중단
               </button>
             )}
           </div>
-          {sheetError && (
-            <p className="text-red-400 text-xs mt-3">{sheetError}</p>
-          )}
+          {sheetError && <p className="text-red-400 text-xs mt-3 pl-1">{sheetError}</p>}
         </div>
 
-        {/* Column Interpretation */}
+        {/* Column Interpretation - collapsed by default */}
         {columnInterpretation && (
-          <div className="mb-8">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">컬럼 해석</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {columnInterpretation.map((col, i) => (
-                <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg p-3">
-                  <p className="text-sm font-medium text-white">{col.column}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    <span className="text-blue-400">{col.type}</span> - {col.description}
-                  </p>
-                </div>
-              ))}
-            </div>
+          <div className="mb-6">
+            <button
+              onClick={() => setShowColumns(v => !v)}
+              className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-400 transition-colors"
+            >
+              <span>{showColumns ? '▾' : '▸'}</span>
+              컬럼 해석 보기 ({columnInterpretation.length}개)
+            </button>
+            {showColumns && (
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {columnInterpretation.map((col, i) => (
+                  <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2.5">
+                    <p className="text-xs font-semibold text-gray-300">{col.column}</p>
+                    <p className="text-xs text-gray-600 mt-0.5"><span className="text-blue-500">{col.type}</span> — {col.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Insights */}
+        {/* ─── Insight Result ─── */}
         {insightResult && (
-          <>
-            <div className="mb-8">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">인사이트</h3>
-              <div className="flex flex-col gap-3">
-                {insightResult.insights.map((insight, i) => (
-                  <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <div className="flex gap-3">
-                      <span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-sm font-bold">
-                        {i + 1}
-                      </span>
+          <div className="space-y-8">
+
+            {/* Insights */}
+            <section>
+              <div className="flex items-center gap-3 mb-4">
+                <h3 className="text-base font-bold text-white">인사이트</h3>
+                <span className="text-xs text-blue-400 bg-blue-950 border border-blue-900 px-2 py-0.5 rounded-full">
+                  {insightResult.insights.length}개
+                </span>
+              </div>
+              <div className="space-y-3">
+                {insightResult.insights.map((insight, i) => {
+                  const accents = ['border-l-blue-500','border-l-violet-500','border-l-cyan-500','border-l-indigo-500','border-l-teal-500']
+                  const numColors = ['bg-blue-600','bg-violet-600','bg-cyan-600','bg-indigo-600','bg-teal-600']
+                  return (
+                    <div key={i} className={`bg-gray-900 border border-gray-800 border-l-4 ${accents[i % accents.length]} rounded-xl px-5 py-4`}>
+                      <div className="flex gap-3 items-start">
+                        <span className={`flex-shrink-0 w-6 h-6 ${numColors[i % numColors.length]} rounded-md flex items-center justify-center text-xs font-bold text-white mt-0.5`}>
+                          {i + 1}
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-white leading-snug mb-2">{insight.title}</p>
+                          <p className="text-sm text-gray-400 leading-relaxed">{insight.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Next Steps */}
+            <section>
+              <h3 className="text-base font-bold text-white mb-4">Next Steps</h3>
+              <div className="space-y-2.5">
+                {insightResult.nextSteps.map((ns, i) =>
+                  ns.type === '추천' ? (
+                    <div key={i} className="bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-5 py-4 flex gap-3 items-start">
+                      <span className="flex-shrink-0 mt-0.5 text-emerald-400 text-base">✓</span>
                       <div>
-                        <p className="text-sm font-semibold text-white mb-1.5">{insight.title}</p>
-                        <p className="text-sm text-gray-400 leading-relaxed">{insight.description}</p>
+                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block mb-1">추천</span>
+                        <p className="text-sm text-gray-200 leading-relaxed">{ns.action}</p>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <div key={i} className="bg-gray-900/60 border border-gray-800 rounded-xl px-5 py-4 flex gap-3 items-start">
+                      <span className="flex-shrink-0 mt-0.5 text-amber-500 text-base">◦</span>
+                      <div>
+                        <span className="text-xs font-bold text-amber-500 uppercase tracking-wider block mb-1">고려</span>
+                        <p className="text-sm text-gray-400 leading-relaxed">{ns.action}</p>
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
-            </div>
+            </section>
 
-            <div className="mb-8">
-              <h3 className="text-sm font-medium text-gray-400 mb-4">Next Steps</h3>
-              <div className="flex flex-col gap-3">
-                {insightResult.nextSteps.map((ns, i) => (
-                  <div key={i} className={`bg-gray-900 border rounded-xl p-5 flex gap-3 items-start ${
-                    ns.type === '추천' ? 'border-blue-800' : 'border-gray-800'
-                  }`}>
-                    <span className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-md ${
-                      ns.type === '추천'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 text-gray-300'
-                    }`}>
-                      {ns.type}
-                    </span>
-                    <p className="text-sm text-gray-200 leading-relaxed pt-0.5">{ns.action}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
+            {/* Report */}
             {insightResult.report && (
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-gray-400 mb-4">광고주 보고 멘트</h3>
-                <div className="bg-gray-900 border border-emerald-900 rounded-xl p-5">
-                  <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-line">{insightResult.report}</p>
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-bold text-white">광고주 보고 멘트</h3>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(insightResult!.report)
+                      setCopiedReport(true)
+                      setTimeout(() => setCopiedReport(false), 2000)
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-300 border border-gray-700 hover:border-gray-500 px-3 py-1 rounded-lg transition-colors"
+                  >
+                    {copiedReport ? '복사됨 ✓' : '복사'}
+                  </button>
                 </div>
-              </div>
+                <div className="relative bg-gradient-to-br from-gray-900 to-gray-900/60 border border-gray-700 rounded-2xl px-6 py-5">
+                  <span className="absolute top-3 left-4 text-5xl text-gray-800 font-serif leading-none select-none">&ldquo;</span>
+                  <p className="text-sm text-gray-200 leading-7 whitespace-pre-line pl-5 relative z-10">{insightResult.report}</p>
+                </div>
+              </section>
             )}
-          </>
-        )}
 
-        {/* Insight History */}
-        {insightHistory.length > 0 && (
-          <div className="mb-8 border-t border-gray-800 pt-8">
-            <div className="flex items-center gap-3 mb-4">
-              <h3 className="text-sm font-medium text-gray-400">인사이트 히스토리</h3>
-              <span className="text-xs text-gray-600">총 {insightHistory.length}회 분석</span>
-            </div>
-            <div className="flex flex-col gap-2">
-              {insightHistory.map((entry) => {
-                const isExpanded = expandedHistoryId === entry.id
-                const date = new Date(entry.created_at)
-                const dateLabel = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
-                return (
-                  <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
-                        className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors text-left"
-                      >
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <span className="text-xs text-gray-500">{dateLabel}</span>
-                          <span className="text-xs text-gray-400">
-                            기준: {entry.analysis_start} ~ {entry.analysis_end}
-                          </span>
-                          {entry.compare_start && (
-                            <span className="text-xs text-gray-600">
-                              비교: {entry.compare_start} ~ {entry.compare_end}
-                            </span>
-                          )}
-                          <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
-                            인사이트 {entry.result.insights?.length || 0}개
-                          </span>
-                        </div>
-                        <span className="text-gray-600 text-xs ml-2">{isExpanded ? '▲' : '▼'}</span>
-                      </button>
-                      <button
-                        onClick={() => deleteHistoryEntry(entry.id)}
-                        className="px-3 py-3 text-gray-600 hover:text-red-400 transition-colors text-xs flex-shrink-0"
-                        title="이 히스토리 삭제 (학습 데이터 포함)"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-4 border-t border-gray-800 pt-3">
-                        <div className="flex flex-col gap-2 mb-3">
-                          {entry.result.insights?.map((ins, i) => (
-                            <div key={i} className="flex gap-2">
-                              <span className="flex-shrink-0 text-xs text-blue-400 font-semibold w-4">{i+1}.</span>
-                              <div>
-                                <p className="text-xs font-medium text-gray-300">{ins.title}</p>
-                                {ins.description && (
-                                  <p className="text-xs text-gray-500 mt-0.5">{ins.description}</p>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        {entry.result.report && (
-                          <div className="bg-gray-800 rounded-lg p-3 mt-2">
-                            <p className="text-xs text-gray-400 leading-relaxed">{entry.result.report}</p>
+            {/* History */}
+            {insightHistory.length > 0 && (
+              <section className="pt-6 border-t border-gray-800">
+                <button
+                  onClick={() => setShowHistory(v => !v)}
+                  className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-white transition-colors w-full text-left mb-1"
+                >
+                  <span>{showHistory ? '▾' : '▸'}</span>
+                  인사이트 히스토리
+                  <span className="text-xs font-normal text-gray-600 ml-1">총 {insightHistory.length}회</span>
+                </button>
+                {showHistory && (
+                  <div className="mt-3 space-y-2">
+                    {insightHistory.map((entry) => {
+                      const isExpanded = expandedHistoryId === entry.id
+                      const date = new Date(entry.created_at)
+                      const dateLabel = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+                      return (
+                        <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                          <div className="flex items-center">
+                            <button
+                              onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
+                              className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-gray-800/60 transition-colors text-left"
+                            >
+                              <span className="text-xs text-gray-600 flex-shrink-0">{dateLabel}</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">{entry.analysis_start} ~ {entry.analysis_end}</span>
+                              {entry.compare_start && (
+                                <span className="text-xs text-gray-700 flex-shrink-0">비교 {entry.compare_start} ~ {entry.compare_end}</span>
+                              )}
+                              <span className="ml-auto text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
+                                {entry.result.insights?.length || 0}개
+                              </span>
+                              <span className="text-gray-700 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                            </button>
+                            <button
+                              onClick={() => deleteHistoryEntry(entry.id)}
+                              className="px-3 py-3 text-gray-700 hover:text-red-400 transition-colors text-xs"
+                              title="삭제"
+                            >✕</button>
                           </div>
-                        )}
-                      </div>
-                    )}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-3 border-t border-gray-800 space-y-2">
+                              {entry.result.insights?.map((ins, i) => (
+                                <div key={i} className="flex gap-2">
+                                  <span className="flex-shrink-0 text-xs text-blue-500 font-bold w-4">{i+1}.</span>
+                                  <div>
+                                    <p className="text-xs font-semibold text-gray-300">{ins.title}</p>
+                                    {ins.description && <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{ins.description}</p>}
+                                  </div>
+                                </div>
+                              ))}
+                              {entry.result.report && (
+                                <div className="bg-gray-800/60 rounded-lg px-3 py-2.5 mt-1">
+                                  <p className="text-xs text-gray-500 leading-relaxed">{entry.result.report}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
-            </div>
+                )}
+              </section>
+            )}
           </div>
         )}
 
