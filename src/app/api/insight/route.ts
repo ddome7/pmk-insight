@@ -100,9 +100,14 @@ export async function POST(request: Request) {
       ? [headers, ...useCompareRows].map(row => row.map(truncate).join('\t')).join('\n')
       : '(해당 기간 데이터 없음)'
 
-    // 광고주 히스토리 조회 (최근 5회)
+    // 광고주 히스토리 조회 (최근 5회) + 매니저 에이전트 조회
     let historyContext = ''
+    let agentPersonaContext = ''
     const supabase = await createClient()
+
+    // 현재 로그인 유저 확인
+    const { data: { user } } = await supabase.auth.getUser()
+
     if (advertiserId) {
       const { data: historyData } = await supabase
         .from('insight_history')
@@ -116,10 +121,30 @@ export async function POST(request: Request) {
       }
     }
 
+    // 매니저 에이전트 조회 (없으면 자동 생성)
+    if (user) {
+      const { data: agentData } = await supabase
+        .from('manager_agents')
+        .select('id, persona')
+        .eq('user_id', user.id)
+        .single()
+
+      if (!agentData) {
+        // 최초 인사이트 생성 시 에이전트 자동 생성
+        await supabase.from('manager_agents').insert({
+          user_id: user.id,
+          manager_name: advertiserName || '매니저',
+          persona: '',
+        })
+      } else if (agentData.persona) {
+        agentPersonaContext = `\n\n[담당 매니저 에이전트 가이드]\n${agentData.persona}`
+      }
+    }
+
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
-      system: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트와 보고서를 제공합니다.
+      system: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트와 보고서를 제공합니다.${agentPersonaContext}
 
 [인사이트 원칙]
 - 단순 수치 나열 금지. 반드시 원인과 비즈니스적 의미를 해석하세요.

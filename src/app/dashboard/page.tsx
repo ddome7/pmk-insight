@@ -20,6 +20,12 @@ interface Folder {
   created_at: string
 }
 
+interface ManagerAgent {
+  id: string
+  manager_name: string
+  persona: string
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -34,6 +40,10 @@ export default function DashboardPage() {
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [folderOrder, setFolderOrder] = useState<string[]>([])
   const [draggingFolderId, setDraggingFolderId] = useState<string | null>(null)
+  const [agent, setAgent] = useState<ManagerAgent | null>(null)
+  const [showAgentEditor, setShowAgentEditor] = useState(false)
+  const [agentPersonaDraft, setAgentPersonaDraft] = useState('')
+  const [savingAgent, setSavingAgent] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -42,8 +52,35 @@ export default function DashboardPage() {
     })
     loadAdvertisers()
     loadFolders()
+    loadAgent()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadAgent = async () => {
+    const res = await fetch('/api/agent')
+    if (res.ok) {
+      const data = await res.json()
+      if (data.agent) {
+        setAgent(data.agent)
+        setAgentPersonaDraft(data.agent.persona || '')
+      }
+    }
+  }
+
+  const handleSaveAgent = async () => {
+    setSavingAgent(true)
+    const res = await fetch('/api/agent', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persona: agentPersonaDraft, manager_name: user?.email || '매니저' }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setAgent(data.agent)
+      setShowAgentEditor(false)
+    }
+    setSavingAgent(false)
+  }
 
   const loadAdvertisers = async () => {
     const { data } = await supabase
@@ -206,6 +243,66 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
+        {/* My Agent Section */}
+        <div className="mb-8 bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-blue-400 bg-blue-950 border border-blue-800 px-2 py-0.5 rounded-md">내 에이전트</span>
+              <span className="text-sm font-medium text-white">
+                {agent ? `${agent.manager_name} 에이전트` : '에이전트 미생성'}
+              </span>
+            </div>
+            <button
+              onClick={() => { setShowAgentEditor(!showAgentEditor); setAgentPersonaDraft(agent?.persona || '') }}
+              className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 rounded px-2 py-1"
+            >
+              {showAgentEditor ? '닫기' : '페르소나 편집'}
+            </button>
+          </div>
+
+          {!agent && !showAgentEditor && (
+            <p className="text-xs text-gray-600 mt-2">첫 인사이트 생성 시 자동으로 에이전트가 만들어집니다.</p>
+          )}
+
+          {agent && !showAgentEditor && (
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+              {agent.persona
+                ? agent.persona
+                : '페르소나가 아직 설정되지 않았습니다. 편집 버튼을 눌러 분석 방향을 설정해보세요.'}
+            </p>
+          )}
+
+          {showAgentEditor && (
+            <div className="mt-3">
+              <p className="text-xs text-gray-500 mb-2">
+                AI가 인사이트를 생성할 때 참고할 분석 방향, 중점 지표, 선호 스타일 등을 자유롭게 작성하세요.
+              </p>
+              <textarea
+                value={agentPersonaDraft}
+                onChange={(e) => setAgentPersonaDraft(e.target.value)}
+                placeholder={`예시:\n- ROAS와 CPA를 최우선 지표로 분석해줘\n- Meta 캠페인 비중이 높은 광고주 위주\n- 보고서는 간결하고 수치 중심으로`}
+                rows={5}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={handleSaveAgent}
+                  disabled={savingAgent}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
+                >
+                  {savingAgent ? '저장 중...' : '저장'}
+                </button>
+                <button
+                  onClick={() => setShowAgentEditor(false)}
+                  className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Folder Section */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
