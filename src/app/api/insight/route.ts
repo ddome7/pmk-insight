@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { createClient } from '@/lib/supabase/server'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -6,6 +7,26 @@ interface ColumnInterpretation {
   column: string
   type: string
   description: string
+}
+
+interface InsightItem {
+  title: string
+  description: string
+}
+
+interface NextStepItem {
+  type: string
+  action: string
+}
+
+interface HistoryRecord {
+  analysis_start: string
+  analysis_end: string
+  result: {
+    insights?: InsightItem[]
+    nextSteps?: NextStepItem[]
+    report?: string
+  }
 }
 
 function filterRowsByDateRange(
@@ -30,11 +51,26 @@ function filterRowsByDateRange(
   })
 }
 
+function buildHistoryContext(history: HistoryRecord[]): string {
+  if (history.length === 0) return ''
+
+  const lines = history.map((h, i) => {
+    const insightTitles = h.result.insights?.map(ins => `  • ${ins.title}`).join('\n') || '  (없음)'
+    const report = h.result.report || '-'
+    return `[${i + 1}차] ${h.analysis_start} ~ ${h.analysis_end}\n인사이트:\n${insightTitles}\n보고 요약: ${report}`
+  })
+
+  return `\n\n[이 광고주의 과거 인사이트 히스토리 (최근 ${history.length}회)]\n` +
+    '이 히스토리를 참고하여 반복 패턴, 개선 여부, 지속 이슈를 파악하고 신규 인사이트에 반영하세요.\n\n' +
+    lines.join('\n\n')
+}
+
 export async function POST(request: Request) {
   try {
     const {
       sheetData, columnInterpretation, advertiserName,
-      analysisStart, analysisEnd, compareStart, compareEnd
+      analysisStart, analysisEnd, compareStart, compareEnd,
+      advertiserId,
     } = await request.json()
 
     if (!sheetData || !columnInterpretation) {
@@ -48,7 +84,6 @@ export async function POST(request: Request) {
     const analysisRows = filterRowsByDateRange(headers, dataRows, columnInterpretation, analysisStart, analysisEnd)
     const compareRows = filterRowsByDateRange(headers, dataRows, columnInterpretation, compareStart, compareEnd)
 
-    // 필터된 데이터가 없으면 최근 15행 폴백
     const useAnalysisRows = analysisRows.length > 0 ? analysisRows : dataRows.slice(-15)
     const useCompareRows = compareRows.length > 0 ? compareRows : []
 
@@ -65,6 +100,22 @@ export async function POST(request: Request) {
       ? [headers, ...useCompareRows].map(row => row.map(truncate).join('\t')).join('\n')
       : '(해당 기간 데이터 없음)'
 
+    // 광고주 히스토리 조회 (최근 5회)
+    let historyContext = ''
+    const supabase = await createClient()
+    if (advertiserId) {
+      const { data: historyData } = await supabase
+        .from('insight_history')
+        .select('analysis_start, analysis_end, result')
+        .eq('advertiser_id', advertiserId)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (historyData && historyData.length > 0) {
+        historyContext = buildHistoryContext([...historyData].reverse() as HistoryRecord[])
+      }
+    }
+
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
@@ -75,6 +126,7 @@ export async function POST(request: Request) {
 - 데이터에 없는 내용 추측 금지. 근거 있는 분석만 작성하세요.
 - 기준 기간과 비교 기간의 데이터를 실제로 비교 분석하세요.
 - 인사이트는 최대 5개, 유의미한 것만 선별하세요.
+- 과거 히스토리가 제공된 경우, 반복 패턴·지속 이슈·개선 여부를 반드시 언급하세요.
 
 [Next Step 원칙]
 - type: "추천" = AI가 즉시 실행을 강력 권고하는 액션
@@ -113,7 +165,7 @@ ${columnDesc}
 ${analysisPreview}
 
 [비교 기간 데이터]
-${comparePreview}
+${comparePreview}${historyContext}
 
 위 데이터를 기반으로 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`,
         },
@@ -133,19 +185,32 @@ ${comparePreview}
       return Response.json({ error: 'AI 응답 형식이 올바르지 않습니다.' }, { status: 500 })
     }
 
-    // 혹시 모델이 string[] 형태로 응답한 경우 자동 변환
-    const normalizedInsights = parsed.insights.map((item: unknown) =>
-      typeof item === 'string' ? { title: item, description: '' } : item
+    const normalizedInsights: InsightItem[] = parsed.insights.map((item: unknown) =>
+      typeof item === 'string' ? { title: item, description: '' } : item as InsightItem
     )
-    const normalizedNextSteps = parsed.nextSteps.map((item: unknown) =>
-      typeof item === 'string' ? { type: '추천', action: item } : item
+    const normalizedNextSteps: NextStepItem[] = parsed.nextSteps.map((item: unknown) =>
+      typeof item === 'string' ? { type: '추천', action: item } : item as NextStepItem
     )
 
-    return Response.json({
+    const finalResult = {
       insights: normalizedInsights,
       nextSteps: normalizedNextSteps,
       report: parsed.report || '',
-    })
+    }
+
+    // 히스토리 저장 (광고주 ID가 있는 경우)
+    if (advertiserId) {
+      await supabase.from('insight_history').insert({
+        advertiser_id: advertiserId,
+        analysis_start: analysisStart,
+        analysis_end: analysisEnd,
+        compare_start: compareStart || null,
+        compare_end: compareEnd || null,
+        result: finalResult,
+      })
+    }
+
+    return Response.json(finalResult)
   } catch (error) {
     console.error('[api/insight] Error:', error)
     return Response.json(

@@ -38,6 +38,16 @@ interface InsightResult {
   report: string
 }
 
+interface HistoryEntry {
+  id: string
+  analysis_start: string
+  analysis_end: string
+  compare_start: string | null
+  compare_end: string | null
+  result: InsightResult
+  created_at: string
+}
+
 export default function AdvertiserInsightPage({
   params,
 }: {
@@ -58,6 +68,8 @@ export default function AdvertiserInsightPage({
   const [generatingInsight, setGeneratingInsight] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [step, setStep] = useState<'idle' | 'fetching' | 'interpreting' | 'generating' | 'done'>('idle')
+  const [insightHistory, setInsightHistory] = useState<HistoryEntry[]>([])
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
 
   const toDateStr = (d: Date) => d.toISOString().split('T')[0]
   const [analysisStart, setAnalysisStart] = useState<Date>(new Date(Date.now() - 86400000))
@@ -102,8 +114,19 @@ export default function AdvertiserInsightPage({
 
   useEffect(() => {
     loadAdvertiser()
+    loadHistory()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
+
+  const loadHistory = async () => {
+    const { data } = await supabase
+      .from('insight_history')
+      .select('*')
+      .eq('advertiser_id', id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    if (data) setInsightHistory(data as HistoryEntry[])
+  }
 
   const loadAdvertiser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -214,6 +237,7 @@ export default function AdvertiserInsightPage({
           sheetData,
           columnInterpretation,
           advertiserName: advertiser?.advertiser_name,
+          advertiserId: advertiser?.id,
           analysisStart: toDateStr(analysisStart),
           analysisEnd: toDateStr(analysisEnd),
           compareStart: toDateStr(compareStart),
@@ -228,10 +252,12 @@ export default function AdvertiserInsightPage({
 
       const data = await response.json()
       setInsightResult(data)
+      loadHistory()
     } catch (err) {
       setSheetError(`인사이트 생성 오류: ${err instanceof Error ? err.message : String(err)}`)
     }
     setGeneratingInsight(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetData, columnInterpretation, advertiser])
 
   const handleGenerateInsight = async () => {
@@ -504,6 +530,70 @@ export default function AdvertiserInsightPage({
               </div>
             )}
           </>
+        )}
+
+        {/* Insight History */}
+        {insightHistory.length > 0 && (
+          <div className="mb-8 border-t border-gray-800 pt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <h3 className="text-sm font-medium text-gray-400">인사이트 히스토리</h3>
+              <span className="text-xs text-gray-600">총 {insightHistory.length}회 분석</span>
+            </div>
+            <div className="flex flex-col gap-2">
+              {insightHistory.map((entry) => {
+                const isExpanded = expandedHistoryId === entry.id
+                const date = new Date(entry.created_at)
+                const dateLabel = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+                return (
+                  <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-500">{dateLabel}</span>
+                        <span className="text-xs text-gray-400">
+                          기준: {entry.analysis_start} ~ {entry.analysis_end}
+                        </span>
+                        {entry.compare_start && (
+                          <span className="text-xs text-gray-600">
+                            비교: {entry.compare_start} ~ {entry.compare_end}
+                          </span>
+                        )}
+                        <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
+                          인사이트 {entry.result.insights?.length || 0}개
+                        </span>
+                      </div>
+                      <span className="text-gray-600 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-4 border-t border-gray-800 pt-3">
+                        <div className="flex flex-col gap-2 mb-3">
+                          {entry.result.insights?.map((ins, i) => (
+                            <div key={i} className="flex gap-2">
+                              <span className="flex-shrink-0 text-xs text-blue-400 font-semibold w-4">{i+1}.</span>
+                              <div>
+                                <p className="text-xs font-medium text-gray-300">{ins.title}</p>
+                                {ins.description && (
+                                  <p className="text-xs text-gray-500 mt-0.5">{ins.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {entry.result.report && (
+                          <div className="bg-gray-800 rounded-lg p-3 mt-2">
+                            <p className="text-xs text-gray-400 leading-relaxed">{entry.result.report}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         )}
 
         {/* Chat Input (UI only) */}
