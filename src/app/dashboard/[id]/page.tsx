@@ -67,6 +67,8 @@ export default function AdvertiserInsightPage({
   const [insightResult, setInsightResult] = useState<InsightResult | null>(null)
   const [generatingInsight, setGeneratingInsight] = useState(false)
   const [chatInput, setChatInput] = useState('')
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [chatLoading, setChatLoading] = useState(false)
   const [step, setStep] = useState<'idle' | 'fetching' | 'interpreting' | 'generating' | 'done'>('idle')
   const [insightHistory, setInsightHistory] = useState<HistoryEntry[]>([])
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
@@ -264,11 +266,52 @@ export default function AdvertiserInsightPage({
     setStep('fetching')
     setSheetError('')
     setInsightResult(null)
+    setChatMessages([])
 
     // Step 1: Fetch sheet data
     if (!sheetData) {
       await fetchSheetData()
     }
+  }
+
+  const buildInsightContext = (result: InsightResult) => {
+    const insightLines = result.insights.map((ins, i) =>
+      `인사이트 ${i + 1}: ${ins.title}\n${ins.description}`
+    ).join('\n\n')
+    const nextStepLines = result.nextSteps.map(ns =>
+      `[${ns.type}] ${ns.action}`
+    ).join('\n')
+    const reportLine = result.report ? `\n보고 멘트: ${result.report}` : ''
+    return `${insightLines}\n\nNext Steps:\n${nextStepLines}${reportLine}`
+  }
+
+  const sendChatMessage = async () => {
+    const trimmed = chatInput.trim()
+    if (!trimmed || chatLoading || !insightResult) return
+
+    const newMessages = [...chatMessages, { role: 'user' as const, content: trimmed }]
+    setChatMessages(newMessages)
+    setChatInput('')
+    setChatLoading(true)
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages,
+          insightContext: buildInsightContext(insightResult),
+          advertiserName: advertiser?.advertiser_name,
+        }),
+      })
+      const data = await res.json()
+      if (data.reply) {
+        setChatMessages([...newMessages, { role: 'assistant', content: data.reply }])
+      }
+    } catch {
+      setChatMessages([...newMessages, { role: 'assistant', content: '오류가 발생했습니다. 다시 시도해주세요.' }])
+    }
+    setChatLoading(false)
   }
 
   // Chain steps via effects
@@ -320,8 +363,8 @@ export default function AdvertiserInsightPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-4">
+    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+      <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-4 flex-shrink-0">
         <button
           onClick={() => router.push('/dashboard')}
           className="text-gray-400 hover:text-white transition-colors text-sm"
@@ -329,9 +372,15 @@ export default function AdvertiserInsightPage({
           &larr; 대시보드
         </button>
         <h1 className="text-lg font-bold">PMK Insight</h1>
+        {insightResult && (
+          <span className="ml-auto text-xs text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-md">
+            추가 질문 활성화됨
+          </span>
+        )}
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 py-10">
+      <div className="flex flex-1 overflow-hidden">
+      <main className="flex-1 overflow-y-auto px-6 py-10 max-w-4xl">
         {/* Advertiser Info */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
           <div className="flex items-start justify-between">
@@ -596,28 +645,77 @@ export default function AdvertiserInsightPage({
           </div>
         )}
 
-        {/* Chat Input (UI only) */}
-        <div className="border-t border-gray-800 pt-6">
-          <h3 className="text-sm font-medium text-gray-400 mb-3">추가 질문</h3>
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="인사이트에 대해 추가 질문을 입력하세요..."
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              className="flex-1 bg-gray-900 border border-gray-800 text-white rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              disabled
-              className="px-6 py-3 bg-gray-700 text-gray-400 rounded-xl text-sm cursor-not-allowed"
-              title="다음 업데이트에서 지원됩니다"
-            >
-              전송
-            </button>
-          </div>
-          <p className="text-xs text-gray-600 mt-2">* 채팅 기능은 다음 업데이트에서 지원됩니다.</p>
-        </div>
       </main>
+
+      {/* Right Chat Panel */}
+      {insightResult ? (
+        <aside className="w-80 flex-shrink-0 border-l border-gray-800 flex flex-col bg-gray-950">
+          <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
+            <h3 className="text-sm font-semibold text-white">추가 질문</h3>
+            <p className="text-xs text-gray-500 mt-0.5">인사이트 기반으로 AI에게 질문하세요</p>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+            {chatMessages.length === 0 && (
+              <div className="text-center pt-8">
+                <p className="text-xs text-gray-600">인사이트에 대해 궁금한 점을<br />자유롭게 질문해 보세요.</p>
+              </div>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+              >
+                <span className="text-xs text-gray-600">
+                  {msg.role === 'user' ? '나' : 'AI'}
+                </span>
+                <div className={`rounded-xl px-3 py-2 text-sm leading-relaxed max-w-[95%] ${
+                  msg.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-800 text-gray-200'
+                }`}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="flex items-start gap-1">
+                <div className="bg-gray-800 rounded-xl px-3 py-2 text-sm text-gray-400">
+                  답변 생성 중...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="px-3 py-3 border-t border-gray-800 flex-shrink-0">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="질문 입력..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
+                disabled={chatLoading}
+                className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+              />
+              <button
+                onClick={sendChatMessage}
+                disabled={chatLoading || !chatInput.trim()}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-lg text-xs transition-colors"
+              >
+                전송
+              </button>
+            </div>
+          </div>
+        </aside>
+      ) : (
+        <aside className="w-80 flex-shrink-0 border-l border-gray-800 flex flex-col items-center justify-center bg-gray-950">
+          <p className="text-xs text-gray-700 text-center px-6">인사이트를 생성하면<br />추가 질문을 사용할 수 있습니다.</p>
+        </aside>
+      )}
+      </div>
     </div>
   )
 }

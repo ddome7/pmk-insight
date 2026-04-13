@@ -334,6 +334,24 @@ export default function DashboardPage() {
   const getFolderCount = (folderId: string) =>
     advertisers.filter(a => a.folder_id === folderId).length
 
+  const FOLDER_COLORS = [
+    { bg: 'bg-blue-950', border: 'border-blue-800', text: 'text-blue-300' },
+    { bg: 'bg-purple-950', border: 'border-purple-800', text: 'text-purple-300' },
+    { bg: 'bg-emerald-950', border: 'border-emerald-800', text: 'text-emerald-300' },
+    { bg: 'bg-amber-950', border: 'border-amber-800', text: 'text-amber-300' },
+    { bg: 'bg-rose-950', border: 'border-rose-800', text: 'text-rose-300' },
+    { bg: 'bg-cyan-950', border: 'border-cyan-800', text: 'text-cyan-300' },
+    { bg: 'bg-orange-950', border: 'border-orange-800', text: 'text-orange-300' },
+    { bg: 'bg-teal-950', border: 'border-teal-800', text: 'text-teal-300' },
+  ]
+  const getFolderColor = (folderId: string) => {
+    let hash = 0
+    for (let i = 0; i < folderId.length; i++) {
+      hash = folderId.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return FOLDER_COLORS[Math.abs(hash) % FOLDER_COLORS.length]
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
@@ -540,6 +558,7 @@ export default function DashboardPage() {
                 const isBeingDraggedOver = dragOverFolderId === folder.id
                 const isDraggingThis = draggingFolderId === folder.id
                 const isDropTarget = isBeingDraggedOver && (draggingFolderId || draggingAdvertiserId) && !isDraggingThis
+                const color = getFolderColor(folder.id)
                 return (
                   <div
                     key={folder.id}
@@ -562,7 +581,7 @@ export default function DashboardPage() {
                           ? 'bg-blue-900/60 border-blue-400 text-white shadow-lg shadow-blue-900/50 scale-105'
                           : selectedFolderId === folder.id
                             ? 'bg-blue-600 border-blue-500 text-white'
-                            : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
+                            : `${color.bg} ${color.border} ${color.text} hover:brightness-125`
                     }`}
                   >
                     {isDropTarget && (
