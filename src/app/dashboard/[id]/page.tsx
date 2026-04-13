@@ -48,8 +48,10 @@ export default function AdvertiserInsightPage({
   const toDateStr = (d: Date) => d.toISOString().split('T')[0]
   const yesterday = toDateStr(new Date(Date.now() - 86400000))
   const dayBeforeYesterday = toDateStr(new Date(Date.now() - 86400000 * 2))
-  const [analysisDate, setAnalysisDate] = useState(yesterday)
-  const [compareDate, setCompareDate] = useState(dayBeforeYesterday)
+  const [analysisStart, setAnalysisStart] = useState(yesterday)
+  const [analysisEnd, setAnalysisEnd] = useState(yesterday)
+  const [compareStart, setCompareStart] = useState(dayBeforeYesterday)
+  const [compareEnd, setCompareEnd] = useState(dayBeforeYesterday)
 
   useEffect(() => {
     loadAdvertiser()
@@ -165,8 +167,10 @@ export default function AdvertiserInsightPage({
           sheetData,
           columnInterpretation,
           advertiserName: advertiser?.advertiser_name,
-          analysisDate,
-          compareDate,
+          analysisStart,
+          analysisEnd,
+          compareStart,
+          compareEnd,
         }),
       })
 
@@ -276,25 +280,45 @@ export default function AdvertiserInsightPage({
 
         {/* Date Selection */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-          <h3 className="text-sm font-medium text-gray-400 mb-4">분석 기간 설정</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-4">기간 설정</h3>
+          <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="text-xs text-gray-500 mb-1.5 block">분석일자</label>
-              <input
-                type="date"
-                value={analysisDate}
-                onChange={(e) => setAnalysisDate(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="text-xs text-blue-400 font-medium mb-2 block">기준 기간</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={analysisStart}
+                  onChange={(e) => setAnalysisStart(e.target.value)}
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-600 text-xs">~</span>
+                <input
+                  type="date"
+                  value={analysisEnd}
+                  min={analysisStart}
+                  onChange={(e) => setAnalysisEnd(e.target.value)}
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
             <div>
-              <label className="text-xs text-gray-500 mb-1.5 block">비교일자</label>
-              <input
-                type="date"
-                value={compareDate}
-                onChange={(e) => setCompareDate(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="text-xs text-gray-400 font-medium mb-2 block">비교 기간</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={compareStart}
+                  onChange={(e) => setCompareStart(e.target.value)}
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-gray-600 text-xs">~</span>
+                <input
+                  type="date"
+                  value={compareEnd}
+                  min={compareStart}
+                  onChange={(e) => setCompareEnd(e.target.value)}
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
           </div>
         </div>
