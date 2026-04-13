@@ -30,6 +30,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    router.prefetch('/dashboard')
     loadAdminData()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -83,9 +84,9 @@ export default function AdminPage() {
       <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-4">
         <button
           onClick={() => router.push('/dashboard')}
-          className="text-gray-400 hover:text-white transition-colors text-sm"
+          className="flex items-center gap-1.5 text-gray-300 hover:text-white text-sm px-3 py-1.5 rounded-lg border border-gray-700 hover:border-gray-500 bg-gray-900 hover:bg-gray-800 transition-colors"
         >
-          &larr; 대시보드
+          ← 대시보드
         </button>
         <h1 className="text-lg font-bold">PMK Insight</h1>
         <span className="text-xs font-semibold text-amber-400 bg-amber-950 border border-amber-800 px-2 py-0.5 rounded-md">관리자 패널</span>
