@@ -328,7 +328,11 @@ export default function AdvertiserInsightPage({
 
   const deleteHistoryEntry = async (entryId: string) => {
     if (!confirm('이 인사이트 히스토리를 삭제하시겠습니까?\n해당 기간의 학습 데이터도 함께 제거됩니다.')) return
-    await supabase.from('insight_history').delete().eq('id', entryId)
+    const { error } = await supabase.from('insight_history').delete().eq('id', entryId)
+    if (error) {
+      alert('삭제에 실패했습니다. 권한을 확인해주세요.')
+      return
+    }
     setInsightHistory(prev => prev.filter(e => e.id !== entryId))
     if (expandedHistoryId === entryId) setExpandedHistoryId(null)
   }
