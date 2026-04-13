@@ -19,10 +19,10 @@ export async function GET() {
   }
 }
 
-// PUT: 에이전트 페르소나 업데이트
+// PUT: 에이전트 업데이트
 export async function PUT(request: Request) {
   try {
-    const { persona, manager_name } = await request.json()
+    const { agent_name, persona, tone, manager_name } = await request.json()
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return Response.json({ error: '인증이 필요합니다.' }, { status: 401 })
@@ -32,7 +32,9 @@ export async function PUT(request: Request) {
       .upsert({
         user_id: user.id,
         manager_name: manager_name || '매니저',
+        agent_name: agent_name || '',
         persona: persona || '',
+        tone: tone || '',
       }, { onConflict: 'user_id,manager_name' })
       .select()
       .single()

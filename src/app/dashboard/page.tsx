@@ -23,7 +23,9 @@ interface Folder {
 interface ManagerAgent {
   id: string
   manager_name: string
+  agent_name: string
   persona: string
+  tone: string
 }
 
 export default function DashboardPage() {
@@ -42,7 +44,9 @@ export default function DashboardPage() {
   const [draggingFolderId, setDraggingFolderId] = useState<string | null>(null)
   const [agent, setAgent] = useState<ManagerAgent | null>(null)
   const [showAgentEditor, setShowAgentEditor] = useState(false)
+  const [agentNameDraft, setAgentNameDraft] = useState('')
   const [agentPersonaDraft, setAgentPersonaDraft] = useState('')
+  const [agentToneDraft, setAgentToneDraft] = useState('')
   const [savingAgent, setSavingAgent] = useState(false)
 
   useEffect(() => {
@@ -62,7 +66,9 @@ export default function DashboardPage() {
       const data = await res.json()
       if (data.agent) {
         setAgent(data.agent)
+        setAgentNameDraft(data.agent.agent_name || '')
         setAgentPersonaDraft(data.agent.persona || '')
+        setAgentToneDraft(data.agent.tone || '')
       }
     }
   }
@@ -72,7 +78,12 @@ export default function DashboardPage() {
     const res = await fetch('/api/agent', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ persona: agentPersonaDraft, manager_name: user?.email || '매니저' }),
+      body: JSON.stringify({
+        agent_name: agentNameDraft,
+        persona: agentPersonaDraft,
+        tone: agentToneDraft,
+        manager_name: user?.email || '매니저',
+      }),
     })
     if (res.ok) {
       const data = await res.json()
@@ -245,46 +256,86 @@ export default function DashboardPage() {
       <main className="max-w-5xl mx-auto px-6 py-10">
         {/* My Agent Section */}
         <div className="mb-8 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-blue-400 bg-blue-950 border border-blue-800 px-2 py-0.5 rounded-md">내 에이전트</span>
               <span className="text-sm font-medium text-white">
-                {agent ? `${agent.manager_name} 에이전트` : '에이전트 미생성'}
+                {agent?.agent_name ? agent.agent_name : '이름 미설정'}
               </span>
             </div>
             <button
-              onClick={() => { setShowAgentEditor(!showAgentEditor); setAgentPersonaDraft(agent?.persona || '') }}
+              onClick={() => {
+                setShowAgentEditor(!showAgentEditor)
+                setAgentNameDraft(agent?.agent_name || '')
+                setAgentPersonaDraft(agent?.persona || '')
+                setAgentToneDraft(agent?.tone || '')
+              }}
               className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 rounded px-2 py-1"
             >
-              {showAgentEditor ? '닫기' : '페르소나 편집'}
+              {showAgentEditor ? '닫기' : '에이전트 설정'}
             </button>
           </div>
 
-          {!agent && !showAgentEditor && (
-            <p className="text-xs text-gray-600 mt-2">첫 인사이트 생성 시 자동으로 에이전트가 만들어집니다.</p>
-          )}
-
-          {agent && !showAgentEditor && (
-            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              {agent.persona
-                ? agent.persona
-                : '페르소나가 아직 설정되지 않았습니다. 편집 버튼을 눌러 분석 방향을 설정해보세요.'}
-            </p>
+          {!showAgentEditor && (
+            <div className="flex flex-col gap-1.5">
+              {agent?.persona || agent?.tone ? (
+                <>
+                  {agent.persona && (
+                    <p className="text-xs text-gray-500">
+                      <span className="text-gray-600">페르소나 </span>{agent.persona}
+                    </p>
+                  )}
+                  {agent.tone && (
+                    <p className="text-xs text-gray-500">
+                      <span className="text-gray-600">말투 </span>{agent.tone}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-gray-600">에이전트 설정 버튼을 눌러 이름·페르소나·말투를 설정해보세요.</p>
+              )}
+            </div>
           )}
 
           {showAgentEditor && (
-            <div className="mt-3">
-              <p className="text-xs text-gray-500 mb-2">
-                AI가 인사이트를 생성할 때 참고할 분석 방향, 중점 지표, 선호 스타일 등을 자유롭게 작성하세요.
-              </p>
-              <textarea
-                value={agentPersonaDraft}
-                onChange={(e) => setAgentPersonaDraft(e.target.value)}
-                placeholder={`예시:\n- ROAS와 CPA를 최우선 지표로 분석해줘\n- Meta 캠페인 비중이 높은 광고주 위주\n- 보고서는 간결하고 수치 중심으로`}
-                rows={5}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-              <div className="flex gap-2 mt-2">
+            <div className="flex flex-col gap-4 mt-1">
+              {/* 에이전트 이름 */}
+              <div>
+                <label className="text-xs text-gray-400 font-medium block mb-1.5">에이전트 이름</label>
+                <input
+                  type="text"
+                  value={agentNameDraft}
+                  onChange={(e) => setAgentNameDraft(e.target.value)}
+                  placeholder="데이터 해적왕 / 숫자 탐정 / ROAS 사냥꾼 / 광고 저승사자 / 인사이트 기계"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* 페르소나 */}
+              <div>
+                <label className="text-xs text-gray-400 font-medium block mb-1.5">페르소나</label>
+                <textarea
+                  value={agentPersonaDraft}
+                  onChange={(e) => setAgentPersonaDraft(e.target.value)}
+                  placeholder={"분석 방향, 중점 지표, 선호하는 인사이트 유형 등을 적어주세요.\n예: ROAS와 CPA 중심으로 분석 / Meta 비중 높은 광고주 위주 / 보고서는 수치 중심으로"}
+                  rows={3}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              {/* 말투 */}
+              <div>
+                <label className="text-xs text-gray-400 font-medium block mb-1.5">말투</label>
+                <input
+                  type="text"
+                  value={agentToneDraft}
+                  onChange={(e) => setAgentToneDraft(e.target.value)}
+                  placeholder="예: 핵심만 간결하게 / 친근하고 쉽게 / 전문적이고 냉정하게 / 수치 중심으로 직설적으로"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex gap-2">
                 <button
                   onClick={handleSaveAgent}
                   disabled={savingAgent}

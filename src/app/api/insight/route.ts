@@ -134,10 +134,18 @@ export async function POST(request: Request) {
         await supabase.from('manager_agents').insert({
           user_id: user.id,
           manager_name: advertiserName || '매니저',
+          agent_name: '',
           persona: '',
+          tone: '',
         })
-      } else if (agentData.persona) {
-        agentPersonaContext = `\n\n[담당 매니저 에이전트 가이드]\n${agentData.persona}`
+      } else {
+        const parts: string[] = []
+        if (agentData.persona) parts.push(`분석 방향: ${agentData.persona}`)
+        if (agentData.tone) parts.push(`말투·보고 스타일: ${agentData.tone}`)
+        if (parts.length > 0) {
+          const nameLabel = agentData.agent_name ? `[${agentData.agent_name}] ` : ''
+          agentPersonaContext = `\n\n${nameLabel}[담당 매니저 에이전트 가이드]\n${parts.join('\n')}`
+        }
       }
     }
 
