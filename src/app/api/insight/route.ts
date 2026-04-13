@@ -108,6 +108,17 @@ export async function POST(request: Request) {
     // 현재 로그인 유저 확인
     const { data: { user } } = await supabase.auth.getUser()
 
+    // 광고주 소유자 확인 (담당 매니저 판별)
+    let isOwnAdvertiser = false
+    if (advertiserId && user) {
+      const { data: advData } = await supabase
+        .from('advertisers')
+        .select('user_id')
+        .eq('id', advertiserId)
+        .single()
+      isOwnAdvertiser = advData?.user_id === user.id
+    }
+
     if (advertiserId) {
       const { data: historyData } = await supabase
         .from('insight_history')
@@ -121,7 +132,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 매니저 에이전트 조회 (없으면 자동 생성)
+    // 매니저 에이전트 조회 (본인 광고주일 때만 적용)
     if (user) {
       const { data: agentData } = await supabase
         .from('manager_agents')
@@ -130,7 +141,6 @@ export async function POST(request: Request) {
         .single()
 
       if (!agentData) {
-        // 최초 인사이트 생성 시 에이전트 자동 생성
         await supabase.from('manager_agents').insert({
           user_id: user.id,
           manager_name: advertiserName || '매니저',
@@ -138,7 +148,8 @@ export async function POST(request: Request) {
           persona: '',
           tone: '',
         })
-      } else {
+      } else if (isOwnAdvertiser) {
+        // 본인 광고주일 때만 에이전트 페르소나 적용
         const parts: string[] = []
         if (agentData.persona) parts.push(`분석 방향: ${agentData.persona}`)
         if (agentData.tone) parts.push(`말투·보고 스타일: ${agentData.tone}`)

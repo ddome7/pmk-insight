@@ -7,6 +7,7 @@ import AddAdvertiserModal from '@/components/AddAdvertiserModal'
 
 interface Advertiser {
   id: string
+  user_id: string
   manager_name: string
   advertiser_name: string
   sheet_url: string
@@ -31,7 +32,7 @@ interface ManagerAgent {
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
-  const [user, setUser] = useState<{ email?: string } | null>(null)
+  const [user, setUser] = useState<{ id?: string; email?: string } | null>(null)
   const [advertisers, setAdvertisers] = useState<Advertiser[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -48,6 +49,7 @@ export default function DashboardPage() {
   const [agentPersonaDraft, setAgentPersonaDraft] = useState('')
   const [agentToneDraft, setAgentToneDraft] = useState('')
   const [savingAgent, setSavingAgent] = useState(false)
+  const [showMatchingView, setShowMatchingView] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -481,62 +483,120 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-semibold">
-              {selectedFolderId
+              {showMatchingView ? '매칭 현황' : selectedFolderId
                 ? folders.find(f => f.id === selectedFolderId)?.name ?? '광고주 목록'
                 : '광고주 목록'}
             </h2>
-            {selectedFolderId === null && uncategorizedCount > 0 && uncategorizedCount < advertisers.length && (
+            {!showMatchingView && selectedFolderId === null && (
               <p className="text-xs text-gray-500 mt-1">
-                미분류 {uncategorizedCount}개 / 전체 {advertisers.length}개
+                내 광고주 {advertisers.filter(a => a.user_id === user?.id).length}개 · 전체 {advertisers.length}개
               </p>
             )}
           </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            + 광고주 추가
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowMatchingView(!showMatchingView)}
+              className={`text-sm font-medium px-4 py-2 rounded-lg transition-colors border ${
+                showMatchingView
+                  ? 'bg-purple-600 border-purple-500 text-white'
+                  : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+              }`}
+            >
+              매칭 현황
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              + 광고주 추가
+            </button>
+          </div>
         </div>
 
-        {/* Advertiser Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {filteredAdvertisers.map(adv => (
-            <div
-              key={adv.id}
-              draggable
-              onDragStart={(e) => handleDragStart(e, adv.id)}
-              onClick={() => router.push(`/dashboard/${adv.id}`)}
-              className="bg-gray-900 border border-gray-800 rounded-lg p-3 hover:border-gray-600 cursor-pointer transition-colors"
-            >
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1 min-w-0 mr-2">
-                  <p className="text-sm font-semibold text-white truncate">{adv.advertiser_name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">담당: {adv.manager_name}</p>
-                </div>
-                <button
-                  onClick={(e) => handleDeleteAdvertiser(e, adv.id)}
-                  className="text-xs text-gray-700 hover:text-red-400 transition-colors flex-shrink-0"
-                >
-                  삭제
-                </button>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded w-fit">시트 연결됨</span>
-                {adv.folder_id && (
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className="text-xs text-gray-500">그룹 : {folders.find(f => f.id === adv.folder_id)?.name}</span>
-                    <button
-                      onClick={(e) => handleUngroup(e, adv.id)}
-                      className="text-xs text-orange-400 hover:text-orange-300 transition-colors flex-shrink-0 border border-orange-800 hover:border-orange-400 rounded px-1.5 py-0.5"
-                    >
-                      그룹해제
-                    </button>
+        {/* Matching View */}
+        {showMatchingView ? (
+          <div className="flex flex-col gap-6">
+            {Array.from(new Set(advertisers.map(a => a.manager_name))).map(managerName => {
+              const managerAdvs = advertisers.filter(a => a.manager_name === managerName)
+              const isMe = managerAdvs.some(a => a.user_id === user?.id)
+              return (
+                <div key={managerName} className={`rounded-xl border p-5 ${isMe ? 'border-blue-800 bg-blue-950/20' : 'border-gray-800 bg-gray-900'}`}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-md border ${isMe ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>
+                      {isMe ? '나' : '매니저'}
+                    </span>
+                    <span className="text-sm font-semibold text-white">{managerName}</span>
+                    <span className="text-xs text-gray-500">광고주 {managerAdvs.length}개</span>
                   </div>
-                )}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                    {managerAdvs.map(adv => (
+                      <div
+                        key={adv.id}
+                        onClick={() => router.push(`/dashboard/${adv.id}`)}
+                        className="bg-gray-800 border border-gray-700 rounded-lg p-3 cursor-pointer hover:border-gray-500 transition-colors"
+                      >
+                        <p className="text-xs font-semibold text-white truncate">{adv.advertiser_name}</p>
+                        <span className="text-xs text-gray-500 mt-1 block">시트 연결됨</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+        /* Advertiser Cards */
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {filteredAdvertisers.map(adv => {
+            const isOwn = adv.user_id === user?.id
+            return (
+              <div
+                key={adv.id}
+                draggable={isOwn}
+                onDragStart={(e) => isOwn && handleDragStart(e, adv.id)}
+                onClick={() => router.push(`/dashboard/${adv.id}`)}
+                className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                  isOwn
+                    ? 'bg-gray-900 border-gray-800 hover:border-gray-600'
+                    : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0 mr-2">
+                    <p className="text-sm font-semibold text-white truncate">{adv.advertiser_name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 truncate">담당: {adv.manager_name}</p>
+                  </div>
+                  {isOwn && (
+                    <button
+                      onClick={(e) => handleDeleteAdvertiser(e, adv.id)}
+                      className="text-xs text-gray-700 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      삭제
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded w-fit">시트 연결됨</span>
+                    {!isOwn && (
+                      <span className="text-xs bg-purple-950 text-purple-400 border border-purple-900 px-1.5 py-0.5 rounded w-fit">타 매니저</span>
+                    )}
+                  </div>
+                  {adv.folder_id && isOwn && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-xs text-gray-500">그룹 : {folders.find(f => f.id === adv.folder_id)?.name}</span>
+                      <button
+                        onClick={(e) => handleUngroup(e, adv.id)}
+                        className="text-xs text-orange-400 hover:text-orange-300 transition-colors flex-shrink-0 border border-orange-800 hover:border-orange-400 rounded px-1.5 py-0.5"
+                      >
+                        그룹해제
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
           <div
             onClick={() => setShowModal(true)}
@@ -546,6 +606,7 @@ export default function DashboardPage() {
             <span className="text-sm">광고주 추가</span>
           </div>
         </div>
+        )}
       </main>
 
       {showModal && (
