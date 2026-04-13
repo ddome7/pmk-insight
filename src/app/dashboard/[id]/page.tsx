@@ -1,6 +1,6 @@
 'use client'
 
-import { use, useEffect, useState, useCallback } from 'react'
+import { use, useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import DatePicker from 'react-datepicker'
@@ -72,6 +72,27 @@ export default function AdvertiserInsightPage({
   const [step, setStep] = useState<'idle' | 'fetching' | 'interpreting' | 'generating' | 'done'>('idle')
   const [insightHistory, setInsightHistory] = useState<HistoryEntry[]>([])
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
+
+  // 패널 크기 조절
+  const [rightPanelPct, setRightPanelPct] = useState(20)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const isDragging = useRef(false)
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const newRightPct = Math.max(15, Math.min(50, (1 - (e.clientX - rect.left) / rect.width) * 100))
+      setRightPanelPct(newRightPct)
+    }
+    const onMouseUp = () => { isDragging.current = false }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
 
   const toDateStr = (d: Date) => d.toISOString().split('T')[0]
   const [analysisStart, setAnalysisStart] = useState<Date>(new Date(Date.now() - 86400000))
@@ -285,6 +306,13 @@ export default function AdvertiserInsightPage({
     return `${insightLines}\n\nNext Steps:\n${nextStepLines}${reportLine}`
   }
 
+  const deleteHistoryEntry = async (entryId: string) => {
+    if (!confirm('이 인사이트 히스토리를 삭제하시겠습니까?\n해당 기간의 학습 데이터도 함께 제거됩니다.')) return
+    await supabase.from('insight_history').delete().eq('id', entryId)
+    setInsightHistory(prev => prev.filter(e => e.id !== entryId))
+    if (expandedHistoryId === entryId) setExpandedHistoryId(null)
+  }
+
   const sendChatMessage = async () => {
     const trimmed = chatInput.trim()
     if (!trimmed || chatLoading || !insightResult) return
@@ -379,8 +407,8 @@ export default function AdvertiserInsightPage({
         )}
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-      <main className="flex-1 overflow-y-auto px-6 py-10 max-w-4xl">
+      <div ref={containerRef} className="flex flex-1 overflow-hidden select-none">
+      <main className="overflow-y-auto px-6 py-10" style={{ width: `${100 - rightPanelPct}%` }}>
         {/* Advertiser Info */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
           <div className="flex items-start justify-between">
@@ -595,26 +623,35 @@ export default function AdvertiserInsightPage({
                 const dateLabel = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
                 return (
                   <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors text-left"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-500">{dateLabel}</span>
-                        <span className="text-xs text-gray-400">
-                          기준: {entry.analysis_start} ~ {entry.analysis_end}
-                        </span>
-                        {entry.compare_start && (
-                          <span className="text-xs text-gray-600">
-                            비교: {entry.compare_start} ~ {entry.compare_end}
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
+                        className="flex-1 flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-xs text-gray-500">{dateLabel}</span>
+                          <span className="text-xs text-gray-400">
+                            기준: {entry.analysis_start} ~ {entry.analysis_end}
                           </span>
-                        )}
-                        <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
-                          인사이트 {entry.result.insights?.length || 0}개
-                        </span>
-                      </div>
-                      <span className="text-gray-600 text-xs">{isExpanded ? '▲' : '▼'}</span>
-                    </button>
+                          {entry.compare_start && (
+                            <span className="text-xs text-gray-600">
+                              비교: {entry.compare_start} ~ {entry.compare_end}
+                            </span>
+                          )}
+                          <span className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
+                            인사이트 {entry.result.insights?.length || 0}개
+                          </span>
+                        </div>
+                        <span className="text-gray-600 text-xs ml-2">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+                      <button
+                        onClick={() => deleteHistoryEntry(entry.id)}
+                        className="px-3 py-3 text-gray-600 hover:text-red-400 transition-colors text-xs flex-shrink-0"
+                        title="이 히스토리 삭제 (학습 데이터 포함)"
+                      >
+                        ✕
+                      </button>
+                    </div>
 
                     {isExpanded && (
                       <div className="px-4 pb-4 border-t border-gray-800 pt-3">
@@ -647,9 +684,16 @@ export default function AdvertiserInsightPage({
 
       </main>
 
+      {/* Divider */}
+      <div
+        onMouseDown={(e) => { e.preventDefault(); isDragging.current = true }}
+        className="w-1 flex-shrink-0 bg-gray-800 hover:bg-blue-500 active:bg-blue-400 cursor-col-resize transition-colors"
+        title="드래그하여 크기 조절"
+      />
+
       {/* Right Chat Panel */}
       {insightResult ? (
-        <aside className="w-80 flex-shrink-0 border-l border-gray-800 flex flex-col bg-gray-950">
+        <aside className="flex-shrink-0 border-l-0 flex flex-col bg-gray-950" style={{ width: `${rightPanelPct}%` }}>
           <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
             <h3 className="text-sm font-semibold text-white">추가 질문</h3>
             <p className="text-xs text-gray-500 mt-0.5">인사이트 기반으로 AI에게 질문하세요</p>
@@ -711,7 +755,7 @@ export default function AdvertiserInsightPage({
           </div>
         </aside>
       ) : (
-        <aside className="w-80 flex-shrink-0 border-l border-gray-800 flex flex-col items-center justify-center bg-gray-950">
+        <aside className="flex-shrink-0 border-l-0 flex flex-col items-center justify-center bg-gray-950" style={{ width: `${rightPanelPct}%` }}>
           <p className="text-xs text-gray-700 text-center px-6">인사이트를 생성하면<br />추가 질문을 사용할 수 있습니다.</p>
         </aside>
       )}
