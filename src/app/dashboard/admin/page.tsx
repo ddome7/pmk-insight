@@ -17,13 +17,21 @@ interface AppUser {
 
 export default function AdminPage() {
   const router = useRouter()
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null)
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(() => {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('pmk_isAdmin')
+      if (cached === 'true') return true
+      if (cached === 'false') return false
+    }
+    return null
+  })
   const [adminList, setAdminList] = useState<AdminUser[]>([])
   const [appUsers, setAppUsers] = useState<AppUser[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     loadAdminData()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadAdminData = async () => {
@@ -32,6 +40,7 @@ export default function AdminPage() {
     const data = await res.json()
     if (!data.isAdmin) { router.push('/dashboard'); return }
     setIsAdmin(true)
+    localStorage.setItem('pmk_isAdmin', 'true')
     setAdminList(data.admins || [])
     setAppUsers(data.users || [])
   }
@@ -59,10 +68,10 @@ export default function AdminPage() {
     setLoading(false)
   }
 
-  if (isAdmin === null) {
+  if (isAdmin === false) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-400 text-sm">확인 중...</p>
+        <p className="text-gray-400 text-sm">권한이 없습니다.</p>
       </div>
     )
   }

@@ -65,11 +65,15 @@ export default function DashboardPage() {
   const [showMatchingView, setShowMatchingView] = useState(false)
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [folderBreadcrumb, setFolderBreadcrumb] = useState<Folder[]>([])
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('pmk_isAdmin') === 'true'
+    return false
+  })
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [adminList, setAdminList] = useState<AdminUser[]>([])
   const [appUsers, setAppUsers] = useState<AppUser[]>([])
   const [loadingAdmin, setLoadingAdmin] = useState(false)
+  const [draggingAdvertiserId, setDraggingAdvertiserId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -88,6 +92,7 @@ export default function DashboardPage() {
     if (res.ok) {
       const data = await res.json()
       setIsAdmin(data.isAdmin)
+      localStorage.setItem('pmk_isAdmin', data.isAdmin ? 'true' : 'false')
       setAdminList(data.admins || [])
       setAppUsers(data.users || [])
     }
@@ -253,6 +258,12 @@ export default function DashboardPage() {
   const handleDragStart = useCallback((e: React.DragEvent, advertiserId: string) => {
     e.dataTransfer.setData('text/plain', advertiserId)
     e.dataTransfer.effectAllowed = 'move'
+    setDraggingAdvertiserId(advertiserId)
+  }, [])
+
+  const handleAdvertiserDragEnd = useCallback(() => {
+    setDraggingAdvertiserId(null)
+    setDragOverFolderId(null)
   }, [])
 
   const handleFolderDragStart = useCallback((e: React.DragEvent, folderId: string) => {
@@ -526,32 +537,41 @@ export default function DashboardPage() {
               .filter(f => f.parent_id === currentFolderId)
               .map(folder => {
                 const subCount = folders.filter(f => f.parent_id === folder.id).length
+                const isBeingDraggedOver = dragOverFolderId === folder.id
+                const isDraggingThis = draggingFolderId === folder.id
+                const isDropTarget = isBeingDraggedOver && (draggingFolderId || draggingAdvertiserId) && !isDraggingThis
                 return (
                   <div
                     key={folder.id}
                     draggable
                     onDragStart={(e) => handleFolderDragStart(e, folder.id)}
-                    onDragEnd={() => setDraggingFolderId(null)}
+                    onDragEnd={() => { setDraggingFolderId(null); setDragOverFolderId(null) }}
                     onDragOver={(e) => { e.preventDefault() }}
                     onDrop={(e) => {
                       if (draggingFolderId) handleFolderDrop(e, folder.id)
                       else handleDropOnFolder(e, folder.id)
                     }}
                     onDragEnter={() => setDragOverFolderId(folder.id)}
-                    onDragLeave={() => setDragOverFolderId(null)}
-                    className={`flex items-center gap-1 rounded-xl text-sm font-medium transition-colors border cursor-grab active:cursor-grabbing ${
-                      selectedFolderId === folder.id
-                        ? 'bg-blue-600 border-blue-500 text-white'
-                        : draggingFolderId === folder.id
-                          ? 'opacity-40 bg-gray-800 border-gray-600 text-gray-400'
-                          : dragOverFolderId === folder.id && !draggingFolderId
-                            ? 'bg-gray-700 border-blue-400 text-white'
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverFolderId(null)
+                    }}
+                    className={`relative flex items-center gap-1 rounded-xl text-sm font-medium transition-all border cursor-grab active:cursor-grabbing ${
+                      isDraggingThis
+                        ? 'opacity-40 bg-gray-800 border-gray-600 text-gray-400 scale-95'
+                        : isDropTarget
+                          ? 'bg-blue-900/60 border-blue-400 text-white shadow-lg shadow-blue-900/50 scale-105'
+                          : selectedFolderId === folder.id
+                            ? 'bg-blue-600 border-blue-500 text-white'
                             : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
                     }`}
                   >
+                    {isDropTarget && (
+                      <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-xs text-blue-300 bg-blue-900 border border-blue-700 px-2 py-0.5 rounded whitespace-nowrap pointer-events-none">
+                        여기에 넣기
+                      </span>
+                    )}
                     <button onClick={() => navigateToFolder(folder)} className="px-4 py-3 flex items-center gap-1.5">
-                      {subCount > 0 && <span className="text-xs">📁</span>}
-                      {folder.name} ({getFolderCount(folder.id)})
+                      {subCount > 0 ? '📁' : '🗂️'} {folder.name} ({getFolderCount(folder.id)})
                       {subCount > 0 && <span className="text-xs text-gray-400">+{subCount}</span>}
                     </button>
                     {currentFolderId !== null && (
@@ -566,7 +586,6 @@ export default function DashboardPage() {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
                       className="pr-2 text-gray-500 hover:text-red-400 transition-colors"
-                      title="폴더 삭제"
                     >
                       x
                     </button>
@@ -674,13 +693,16 @@ export default function DashboardPage() {
                 key={adv.id}
                 draggable={hasControl}
                 onDragStart={(e) => hasControl && handleDragStart(e, adv.id)}
+                onDragEnd={handleAdvertiserDragEnd}
                 onClick={() => router.push(`/dashboard/${adv.id}`)}
-                className={`border rounded-lg p-3 cursor-pointer transition-colors ${
-                  isOwn
-                    ? 'bg-gray-900 border-gray-800 hover:border-gray-600'
-                    : isAdmin
-                      ? 'bg-gray-900 border-amber-900/40 hover:border-amber-700/60'
-                      : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  draggingAdvertiserId === adv.id
+                    ? 'opacity-40 scale-95 bg-gray-800 border-gray-700'
+                    : isOwn
+                      ? 'bg-gray-900 border-gray-800 hover:border-gray-600'
+                      : isAdmin
+                        ? 'bg-gray-900 border-amber-900/40 hover:border-amber-700/60'
+                        : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
