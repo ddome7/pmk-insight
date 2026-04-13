@@ -29,6 +29,18 @@ interface ManagerAgent {
   tone: string
 }
 
+interface AdminUser {
+  user_id: string
+  email: string
+  created_at: string
+}
+
+interface AppUser {
+  user_id: string
+  manager_name: string
+  agent_name: string
+}
+
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
@@ -50,6 +62,11 @@ export default function DashboardPage() {
   const [agentToneDraft, setAgentToneDraft] = useState('')
   const [savingAgent, setSavingAgent] = useState(false)
   const [showMatchingView, setShowMatchingView] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [showAdminPanel, setShowAdminPanel] = useState(false)
+  const [adminList, setAdminList] = useState<AdminUser[]>([])
+  const [appUsers, setAppUsers] = useState<AppUser[]>([])
+  const [loadingAdmin, setLoadingAdmin] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -59,8 +76,42 @@ export default function DashboardPage() {
     loadAdvertisers()
     loadFolders()
     loadAgent()
+    loadAdminStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const loadAdminStatus = async () => {
+    const res = await fetch('/api/admin')
+    if (res.ok) {
+      const data = await res.json()
+      setIsAdmin(data.isAdmin)
+      setAdminList(data.admins || [])
+      setAppUsers(data.users || [])
+    }
+  }
+
+  const handleGrantAdmin = async (userId: string, email: string) => {
+    setLoadingAdmin(true)
+    await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, email }),
+    })
+    await loadAdminStatus()
+    setLoadingAdmin(false)
+  }
+
+  const handleRevokeAdmin = async (userId: string) => {
+    if (!confirm('어드민 권한을 회수하시겠습니까?')) return
+    setLoadingAdmin(true)
+    await fetch('/api/admin', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+    await loadAdminStatus()
+    setLoadingAdmin(false)
+  }
 
   const loadAgent = async () => {
     const res = await fetch('/api/agent')
@@ -260,7 +311,18 @@ export default function DashboardPage() {
       <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <h1 className="text-lg font-bold">PMK Insight</h1>
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <span className="text-xs font-semibold text-amber-400 bg-amber-950 border border-amber-800 px-2 py-0.5 rounded-md">관리자</span>
+          )}
           <span className="text-sm text-gray-400">{user?.email}</span>
+          {isAdmin && (
+            <button
+              onClick={() => setShowAdminPanel(!showAdminPanel)}
+              className="text-xs text-amber-400 hover:text-amber-300 transition-colors border border-amber-800 hover:border-amber-600 rounded px-2 py-1"
+            >
+              관리자 패널
+            </button>
+          )}
           <button onClick={handleSignOut} className="text-xs text-gray-500 hover:text-white transition-colors">
             로그아웃
           </button>
@@ -268,6 +330,66 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
+        {/* Admin Panel */}
+        {isAdmin && showAdminPanel && (
+          <div className="mb-8 bg-amber-950/20 border border-amber-800 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-amber-400 mb-4">관리자 패널 — 어드민 권한 관리</h3>
+
+            {/* Current Admins */}
+            <div className="mb-5">
+              <p className="text-xs text-gray-400 font-medium mb-2">현재 어드민</p>
+              <div className="flex flex-col gap-2">
+                {adminList.map(admin => (
+                  <div key={admin.user_id} className="flex items-center justify-between bg-gray-900 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-amber-400 bg-amber-950 border border-amber-800 px-1.5 py-0.5 rounded">관리자</span>
+                      <span className="text-sm text-white">{admin.email || admin.user_id.slice(0, 8) + '...'}</span>
+                      {admin.user_id === user?.id && <span className="text-xs text-gray-500">(나)</span>}
+                    </div>
+                    {admin.user_id !== user?.id && (
+                      <button
+                        onClick={() => handleRevokeAdmin(admin.user_id)}
+                        disabled={loadingAdmin}
+                        className="text-xs text-red-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                      >
+                        권한 회수
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Grant Admin to App Users */}
+            <div>
+              <p className="text-xs text-gray-400 font-medium mb-2">어드민 권한 부여 (앱 사용 매니저)</p>
+              <div className="flex flex-col gap-2">
+                {appUsers
+                  .filter(u => !adminList.some(a => a.user_id === u.user_id))
+                  .map(u => (
+                    <div key={u.user_id} className="flex items-center justify-between bg-gray-900 rounded-lg px-3 py-2">
+                      <div>
+                        <span className="text-sm text-white">{u.manager_name || u.user_id.slice(0, 8) + '...'}</span>
+                        {u.agent_name && <span className="text-xs text-gray-500 ml-2">({u.agent_name})</span>}
+                      </div>
+                      <button
+                        onClick={() => handleGrantAdmin(u.user_id, u.manager_name)}
+                        disabled={loadingAdmin}
+                        className="text-xs text-amber-400 hover:text-amber-300 border border-amber-800 hover:border-amber-600 rounded px-2 py-1 transition-colors disabled:opacity-50"
+                      >
+                        어드민 부여
+                      </button>
+                    </div>
+                  ))
+                }
+                {appUsers.filter(u => !adminList.some(a => a.user_id === u.user_id)).length === 0 && (
+                  <p className="text-xs text-gray-600">어드민을 부여할 수 있는 다른 매니저가 없습니다.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* My Agent Section */}
         <div className="mb-8 bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
@@ -549,16 +671,19 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {filteredAdvertisers.map(adv => {
             const isOwn = adv.user_id === user?.id
+            const hasControl = isOwn || isAdmin
             return (
               <div
                 key={adv.id}
-                draggable={isOwn}
-                onDragStart={(e) => isOwn && handleDragStart(e, adv.id)}
+                draggable={hasControl}
+                onDragStart={(e) => hasControl && handleDragStart(e, adv.id)}
                 onClick={() => router.push(`/dashboard/${adv.id}`)}
                 className={`border rounded-lg p-3 cursor-pointer transition-colors ${
                   isOwn
                     ? 'bg-gray-900 border-gray-800 hover:border-gray-600'
-                    : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
+                    : isAdmin
+                      ? 'bg-gray-900 border-amber-900/40 hover:border-amber-700/60'
+                      : 'bg-gray-900/50 border-gray-800/60 hover:border-gray-700'
                 }`}
               >
                 <div className="flex items-start justify-between mb-2">
@@ -566,7 +691,7 @@ export default function DashboardPage() {
                     <p className="text-sm font-semibold text-white truncate">{adv.advertiser_name}</p>
                     <p className="text-xs text-gray-500 mt-0.5 truncate">담당: {adv.manager_name}</p>
                   </div>
-                  {isOwn && (
+                  {hasControl && (
                     <button
                       onClick={(e) => handleDeleteAdvertiser(e, adv.id)}
                       className="text-xs text-gray-700 hover:text-red-400 transition-colors flex-shrink-0"
@@ -578,11 +703,14 @@ export default function DashboardPage() {
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1">
                     <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded w-fit">시트 연결됨</span>
-                    {!isOwn && (
+                    {!isOwn && !isAdmin && (
                       <span className="text-xs bg-purple-950 text-purple-400 border border-purple-900 px-1.5 py-0.5 rounded w-fit">타 매니저</span>
                     )}
+                    {!isOwn && isAdmin && (
+                      <span className="text-xs bg-amber-950 text-amber-400 border border-amber-900 px-1.5 py-0.5 rounded w-fit">관리자 접근</span>
+                    )}
                   </div>
-                  {adv.folder_id && isOwn && (
+                  {adv.folder_id && hasControl && (
                     <div className="flex items-center gap-1 flex-wrap">
                       <span className="text-xs text-gray-500">그룹 : {folders.find(f => f.id === adv.folder_id)?.name}</span>
                       <button
