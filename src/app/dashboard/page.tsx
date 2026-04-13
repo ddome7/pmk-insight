@@ -304,14 +304,11 @@ export default function DashboardPage() {
               <div className="flex flex-col gap-1">
                 <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded w-fit">시트 연결됨</span>
                 {adv.folder_id && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-gray-500 truncate">
-                      {folders.find(f => f.id === adv.folder_id)?.name}
-                    </span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-xs text-gray-500">그룹 : {folders.find(f => f.id === adv.folder_id)?.name}</span>
                     <button
                       onClick={(e) => handleUngroup(e, adv.id)}
                       className="text-xs text-gray-500 hover:text-yellow-400 transition-colors flex-shrink-0 border border-gray-700 hover:border-yellow-400 rounded px-1.5 py-0.5"
-                      title="그룹 해제"
                     >
                       그룹해제
                     </button>
