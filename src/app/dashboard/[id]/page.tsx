@@ -78,6 +78,18 @@ export default function AdvertiserInsightPage({
   const containerRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
 
+  // 생성 중단
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  const handleAbort = () => {
+    abortControllerRef.current?.abort()
+    setStep('idle')
+    setFetchingSheet(false)
+    setInterpretingColumns(false)
+    setGeneratingInsight(false)
+    setSheetError('')
+  }
+
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!isDragging.current || !containerRef.current) return
@@ -196,6 +208,7 @@ export default function AdvertiserInsightPage({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ spreadsheetId, providerToken }),
+        signal: abortControllerRef.current?.signal,
       })
 
       if (!response.ok) {
@@ -217,6 +230,7 @@ export default function AdvertiserInsightPage({
 
       setSheetData(values)
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') { setFetchingSheet(false); return }
       setSheetError(`오류가 발생했습니다: ${err instanceof Error ? err.message : String(err)}`)
     }
     setFetchingSheet(false)
@@ -234,6 +248,7 @@ export default function AdvertiserInsightPage({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ headers, sampleRows }),
+        signal: abortControllerRef.current?.signal,
       })
 
       if (!response.ok) {
@@ -244,6 +259,7 @@ export default function AdvertiserInsightPage({
       const data = await response.json()
       setColumnInterpretation(data.columns)
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') { setInterpretingColumns(false); return }
       setSheetError(`컬럼 해석 오류: ${err instanceof Error ? err.message : String(err)}`)
     }
     setInterpretingColumns(false)
@@ -267,6 +283,7 @@ export default function AdvertiserInsightPage({
           compareStart: toDateStr(compareStart),
           compareEnd: toDateStr(compareEnd),
         }),
+        signal: abortControllerRef.current?.signal,
       })
 
       if (!response.ok) {
@@ -278,6 +295,7 @@ export default function AdvertiserInsightPage({
       setInsightResult(data)
       loadHistory()
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') { setGeneratingInsight(false); return }
       setSheetError(`인사이트 생성 오류: ${err instanceof Error ? err.message : String(err)}`)
     }
     setGeneratingInsight(false)
@@ -285,6 +303,7 @@ export default function AdvertiserInsightPage({
   }, [sheetData, columnInterpretation, advertiser])
 
   const handleGenerateInsight = async () => {
+    abortControllerRef.current = new AbortController()
     setStep('fetching')
     setSheetError('')
     setInsightResult(null)
@@ -392,7 +411,7 @@ export default function AdvertiserInsightPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+    <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
       <header className="border-b border-gray-800 px-6 py-4 flex items-center gap-4 flex-shrink-0">
         <button
           onClick={() => router.push('/dashboard')}
@@ -408,7 +427,7 @@ export default function AdvertiserInsightPage({
         )}
       </header>
 
-      <div ref={containerRef} className="flex flex-1 overflow-hidden select-none">
+      <div ref={containerRef} className="flex flex-1 min-h-0 overflow-hidden select-none">
       <main className="overflow-y-auto px-6 py-10" style={{ width: `${100 - rightPanelPct}%` }}>
         {/* Advertiser Info */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 mb-8">
@@ -528,13 +547,23 @@ export default function AdvertiserInsightPage({
 
         {/* Generate Insight Button */}
         <div className="mb-8">
-          <button
-            onClick={handleGenerateInsight}
-            disabled={isProcessing}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-400 text-white font-medium rounded-xl transition-colors text-sm"
-          >
-            {isProcessing ? getStepLabel() : (insightResult ? '인사이트 재생성' : '인사이트 생성')}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleGenerateInsight}
+              disabled={isProcessing}
+              className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-400 text-white font-medium rounded-xl transition-colors text-sm"
+            >
+              {isProcessing ? getStepLabel() : (insightResult ? '인사이트 재생성' : '인사이트 생성')}
+            </button>
+            {isProcessing && (
+              <button
+                onClick={handleAbort}
+                className="px-5 py-4 bg-red-900 hover:bg-red-800 border border-red-700 text-red-300 hover:text-white font-medium rounded-xl transition-colors text-sm flex-shrink-0"
+              >
+                중단
+              </button>
+            )}
+          </div>
           {sheetError && (
             <p className="text-red-400 text-xs mt-3">{sheetError}</p>
           )}
