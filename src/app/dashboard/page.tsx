@@ -18,6 +18,7 @@ interface Advertiser {
 interface Folder {
   id: string
   name: string
+  parent_id: string | null
   created_at: string
 }
 
@@ -62,6 +63,8 @@ export default function DashboardPage() {
   const [agentToneDraft, setAgentToneDraft] = useState('')
   const [savingAgent, setSavingAgent] = useState(false)
   const [showMatchingView, setShowMatchingView] = useState(false)
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+  const [folderBreadcrumb, setFolderBreadcrumb] = useState<Folder[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
   const [showAdminPanel, setShowAdminPanel] = useState(false)
   const [adminList, setAdminList] = useState<AdminUser[]>([])
@@ -193,7 +196,7 @@ export default function DashboardPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setCreatingFolder(false); return }
 
-    await supabase.from('folders').insert({ user_id: user.id, name: trimmed })
+    await supabase.from('folders').insert({ user_id: user.id, name: trimmed, parent_id: currentFolderId ?? null })
     setNewFolderName('')
     setShowFolderInput(false)
     setCreatingFolder(false)
@@ -211,6 +214,28 @@ export default function DashboardPage() {
     e.stopPropagation()
     await supabase.from('advertisers').update({ folder_id: null }).eq('id', advertiserId)
     loadAdvertisers()
+  }
+
+  const navigateToFolder = (folder: Folder | null) => {
+    if (!folder) {
+      setCurrentFolderId(null)
+      setSelectedFolderId(null)
+      setFolderBreadcrumb([])
+      return
+    }
+    setCurrentFolderId(folder.id)
+    setSelectedFolderId(folder.id)
+    setFolderBreadcrumb(prev => {
+      const idx = prev.findIndex(f => f.id === folder.id)
+      if (idx !== -1) return prev.slice(0, idx + 1)
+      return [...prev, folder]
+    })
+  }
+
+  const handleUnparentFolder = async (e: React.MouseEvent, folderId: string) => {
+    e.stopPropagation()
+    await supabase.from('folders').update({ parent_id: currentFolderId ?? null }).eq('id', folderId)
+    loadFolders()
   }
 
   const handleDeleteFolder = async (folderId: string) => {
@@ -236,23 +261,17 @@ export default function DashboardPage() {
     setDraggingFolderId(folderId)
   }, [])
 
-  const handleFolderDrop = useCallback((e: React.DragEvent, targetFolderId: string) => {
+  const handleFolderDrop = useCallback(async (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault()
     e.stopPropagation()
     const draggedId = e.dataTransfer.getData('folder/id')
     if (!draggedId || draggedId === targetFolderId) { setDraggingFolderId(null); return }
 
-    setFolderOrder(prev => {
-      const next = [...prev]
-      const fromIdx = next.indexOf(draggedId)
-      const toIdx = next.indexOf(targetFolderId)
-      if (fromIdx === -1 || toIdx === -1) return prev
-      next.splice(fromIdx, 1)
-      next.splice(toIdx, 0, draggedId)
-      localStorage.setItem('folderOrder', JSON.stringify(next))
-      return next
-    })
+    // 폴더를 폴더에 드롭 → 하위 폴더로 귀속
+    await supabase.from('folders').update({ parent_id: targetFolderId }).eq('id', draggedId)
     setDraggingFolderId(null)
+    loadFolders()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -293,12 +312,10 @@ export default function DashboardPage() {
     router.push('/login')
   }
 
-  const sortedFolders = folderOrder.length > 0
-    ? folderOrder.map(id => folders.find(f => f.id === id)).filter(Boolean) as typeof folders
-    : folders
+  // folderOrder는 레거시 - 트리 구조로 대체됨
 
-  const filteredAdvertisers = selectedFolderId
-    ? advertisers.filter(a => a.folder_id === selectedFolderId)
+  const filteredAdvertisers = currentFolderId
+    ? advertisers.filter(a => a.folder_id === currentFolderId)
     : advertisers
 
   const uncategorizedCount = advertisers.filter(a => !a.folder_id).length
@@ -317,7 +334,7 @@ export default function DashboardPage() {
           <span className="text-sm text-gray-400">{user?.email}</span>
           {isAdmin && (
             <button
-              onClick={() => setShowAdminPanel(!showAdminPanel)}
+              onClick={() => router.push('/dashboard/admin')}
               className="text-xs text-amber-400 hover:text-amber-300 transition-colors border border-amber-800 hover:border-amber-600 rounded px-2 py-1"
             >
               관리자 패널
@@ -330,66 +347,6 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
-        {/* Admin Panel */}
-        {isAdmin && showAdminPanel && (
-          <div className="mb-8 bg-amber-950/20 border border-amber-800 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-amber-400 mb-4">관리자 패널 — 어드민 권한 관리</h3>
-
-            {/* Current Admins */}
-            <div className="mb-5">
-              <p className="text-xs text-gray-400 font-medium mb-2">현재 어드민</p>
-              <div className="flex flex-col gap-2">
-                {adminList.map(admin => (
-                  <div key={admin.user_id} className="flex items-center justify-between bg-gray-900 rounded-lg px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-amber-400 bg-amber-950 border border-amber-800 px-1.5 py-0.5 rounded">관리자</span>
-                      <span className="text-sm text-white">{admin.email || admin.user_id.slice(0, 8) + '...'}</span>
-                      {admin.user_id === user?.id && <span className="text-xs text-gray-500">(나)</span>}
-                    </div>
-                    {admin.user_id !== user?.id && (
-                      <button
-                        onClick={() => handleRevokeAdmin(admin.user_id)}
-                        disabled={loadingAdmin}
-                        className="text-xs text-red-500 hover:text-red-400 transition-colors disabled:opacity-50"
-                      >
-                        권한 회수
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Grant Admin to App Users */}
-            <div>
-              <p className="text-xs text-gray-400 font-medium mb-2">어드민 권한 부여 (앱 사용 매니저)</p>
-              <div className="flex flex-col gap-2">
-                {appUsers
-                  .filter(u => !adminList.some(a => a.user_id === u.user_id))
-                  .map(u => (
-                    <div key={u.user_id} className="flex items-center justify-between bg-gray-900 rounded-lg px-3 py-2">
-                      <div>
-                        <span className="text-sm text-white">{u.manager_name || u.user_id.slice(0, 8) + '...'}</span>
-                        {u.agent_name && <span className="text-xs text-gray-500 ml-2">({u.agent_name})</span>}
-                      </div>
-                      <button
-                        onClick={() => handleGrantAdmin(u.user_id, u.manager_name)}
-                        disabled={loadingAdmin}
-                        className="text-xs text-amber-400 hover:text-amber-300 border border-amber-800 hover:border-amber-600 rounded px-2 py-1 transition-colors disabled:opacity-50"
-                      >
-                        어드민 부여
-                      </button>
-                    </div>
-                  ))
-                }
-                {appUsers.filter(u => !adminList.some(a => a.user_id === u.user_id)).length === 0 && (
-                  <p className="text-xs text-gray-600">어드민을 부여할 수 있는 다른 매니저가 없습니다.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* My Agent Section */}
         <div className="mb-8 bg-gray-900 border border-gray-800 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
@@ -500,78 +457,125 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Folder Section */}
+        {/* Folder Tree Section */}
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-3">
             <h3 className="text-sm font-medium text-gray-400">폴더</h3>
-            <button
-              onClick={() => setShowFolderInput(true)}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-            >
+            <button onClick={() => setShowFolderInput(true)} className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
               + 폴더 만들기
             </button>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {/* "All" tab */}
-            <button
-              onClick={() => setSelectedFolderId(null)}
-              onDragOver={handleDragOver}
-              onDrop={handleDropOnUncategorized}
-              onDragEnter={() => setDragOverFolderId('__uncategorized__')}
-              onDragLeave={() => setDragOverFolderId(null)}
-              className={`px-6 py-3 rounded-xl text-sm font-medium transition-colors border ${
-                selectedFolderId === null
-                  ? 'bg-blue-600 border-blue-500 text-white'
-                  : dragOverFolderId === '__uncategorized__'
-                    ? 'bg-gray-700 border-blue-400 text-white'
-                    : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
-              }`}
-            >
-              전체 ({advertisers.length})
-            </button>
+          {/* Breadcrumb */}
+          {folderBreadcrumb.length > 0 && (
+            <div className="flex items-center gap-1 mb-3 text-xs text-gray-500">
+              <button onClick={() => navigateToFolder(null)} className="hover:text-white transition-colors">전체</button>
+              {folderBreadcrumb.map((f, i) => (
+                <span key={f.id} className="flex items-center gap-1">
+                  <span className="text-gray-700">/</span>
+                  <button
+                    onClick={() => navigateToFolder(f)}
+                    className={i === folderBreadcrumb.length - 1 ? 'text-blue-400' : 'hover:text-white transition-colors'}
+                  >
+                    {f.name}
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
-            {/* Folder tabs */}
-            {sortedFolders.map(folder => (
-              <div
-                key={folder.id}
-                draggable
-                onDragStart={(e) => handleFolderDragStart(e, folder.id)}
-                onDragEnd={() => setDraggingFolderId(null)}
-                onDragOver={(e) => { e.preventDefault(); if (!draggingFolderId || draggingFolderId === folder.id) handleDragOver(e) }}
-                onDrop={(e) => {
-                  if (draggingFolderId) handleFolderDrop(e, folder.id)
-                  else handleDropOnFolder(e, folder.id)
-                }}
-                onDragEnter={() => setDragOverFolderId(folder.id)}
+          <div className="flex flex-wrap gap-2">
+            {/* 전체 버튼 (최상위에서만) */}
+            {currentFolderId === null && (
+              <button
+                onClick={() => navigateToFolder(null)}
+                onDragOver={handleDragOver}
+                onDrop={handleDropOnUncategorized}
+                onDragEnter={() => setDragOverFolderId('__uncategorized__')}
                 onDragLeave={() => setDragOverFolderId(null)}
-                className={`flex items-center gap-1 rounded-xl text-sm font-medium transition-colors border cursor-grab active:cursor-grabbing ${
-                  selectedFolderId === folder.id
+                className={`px-6 py-3 rounded-xl text-sm font-medium transition-colors border ${
+                  selectedFolderId === null
                     ? 'bg-blue-600 border-blue-500 text-white'
-                    : draggingFolderId === folder.id
-                      ? 'opacity-40 bg-gray-800 border-gray-600 text-gray-400'
-                      : dragOverFolderId === folder.id && !draggingFolderId
-                        ? 'bg-gray-700 border-blue-400 text-white'
-                        : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
+                    : dragOverFolderId === '__uncategorized__'
+                      ? 'bg-gray-700 border-blue-400 text-white'
+                      : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
                 }`}
               >
-                <button
-                  onClick={() => setSelectedFolderId(folder.id)}
-                  className="px-5 py-3"
-                >
-                  {folder.name} ({getFolderCount(folder.id)})
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
-                  className="pr-2 text-gray-500 hover:text-red-400 transition-colors"
-                  title="폴더 삭제"
-                >
-                  x
-                </button>
-              </div>
-            ))}
+                전체 ({advertisers.length})
+              </button>
+            )}
 
-            {/* New Folder Input */}
+            {/* 상위 폴더로 버튼 (하위 폴더 탐색 중일 때) */}
+            {currentFolderId !== null && (
+              <button
+                onClick={() => {
+                  const newCrumb = folderBreadcrumb.slice(0, -1)
+                  const parent = newCrumb[newCrumb.length - 1] || null
+                  setFolderBreadcrumb(newCrumb)
+                  setCurrentFolderId(parent?.id ?? null)
+                  setSelectedFolderId(parent?.id ?? null)
+                }}
+                className="px-4 py-3 rounded-xl text-sm font-medium transition-colors border bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500"
+              >
+                ← 상위 폴더
+              </button>
+            )}
+
+            {/* 현재 레벨 폴더 목록 */}
+            {folders
+              .filter(f => f.parent_id === currentFolderId)
+              .map(folder => {
+                const subCount = folders.filter(f => f.parent_id === folder.id).length
+                return (
+                  <div
+                    key={folder.id}
+                    draggable
+                    onDragStart={(e) => handleFolderDragStart(e, folder.id)}
+                    onDragEnd={() => setDraggingFolderId(null)}
+                    onDragOver={(e) => { e.preventDefault() }}
+                    onDrop={(e) => {
+                      if (draggingFolderId) handleFolderDrop(e, folder.id)
+                      else handleDropOnFolder(e, folder.id)
+                    }}
+                    onDragEnter={() => setDragOverFolderId(folder.id)}
+                    onDragLeave={() => setDragOverFolderId(null)}
+                    className={`flex items-center gap-1 rounded-xl text-sm font-medium transition-colors border cursor-grab active:cursor-grabbing ${
+                      selectedFolderId === folder.id
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : draggingFolderId === folder.id
+                          ? 'opacity-40 bg-gray-800 border-gray-600 text-gray-400'
+                          : dragOverFolderId === folder.id && !draggingFolderId
+                            ? 'bg-gray-700 border-blue-400 text-white'
+                            : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600'
+                    }`}
+                  >
+                    <button onClick={() => navigateToFolder(folder)} className="px-4 py-3 flex items-center gap-1.5">
+                      {subCount > 0 && <span className="text-xs">📁</span>}
+                      {folder.name} ({getFolderCount(folder.id)})
+                      {subCount > 0 && <span className="text-xs text-gray-400">+{subCount}</span>}
+                    </button>
+                    {currentFolderId !== null && (
+                      <button
+                        onClick={(e) => handleUnparentFolder(e, folder.id)}
+                        className="text-gray-500 hover:text-orange-400 transition-colors text-xs px-1"
+                        title="상위 폴더로 이동"
+                      >
+                        ↑
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id) }}
+                      className="pr-2 text-gray-500 hover:text-red-400 transition-colors"
+                      title="폴더 삭제"
+                    >
+                      x
+                    </button>
+                  </div>
+                )
+              })
+            }
+
+            {/* 새 폴더 입력 */}
             {showFolderInput && (
               <div className="flex items-center gap-2">
                 <input
@@ -583,17 +587,10 @@ export default function DashboardPage() {
                   autoFocus
                   className="bg-gray-800 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 w-32"
                 />
-                <button
-                  onClick={handleCreateFolder}
-                  disabled={creatingFolder}
-                  className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
+                <button onClick={handleCreateFolder} disabled={creatingFolder} className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50">
                   {creatingFolder ? '...' : '확인'}
                 </button>
-                <button
-                  onClick={() => { setShowFolderInput(false); setNewFolderName('') }}
-                  className="px-2 py-2 text-gray-500 hover:text-white text-sm"
-                >
+                <button onClick={() => { setShowFolderInput(false); setNewFolderName('') }} className="px-2 py-2 text-gray-500 hover:text-white text-sm">
                   취소
                 </button>
               </div>
