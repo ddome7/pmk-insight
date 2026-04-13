@@ -283,35 +283,7 @@ export default function AdvertiserInsightPage({
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
           <h3 className="text-sm font-medium text-gray-400 mb-4">기간 설정</h3>
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <label className="text-xs text-blue-400 font-medium mb-2 block">기준 기간</label>
-              <div className="flex items-center gap-2">
-                <DatePicker
-                  selected={analysisStart}
-                  onChange={(date: Date | null) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }}
-                  selectsStart
-                  startDate={analysisStart}
-                  endDate={analysisEnd}
-                  locale={ko}
-                  dateFormat="yyyy.MM.dd"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  calendarClassName="dark-calendar"
-                />
-                <span className="text-gray-600 text-xs flex-shrink-0">~</span>
-                <DatePicker
-                  selected={analysisEnd}
-                  onChange={(date: Date | null) => { if (date) setAnalysisEnd(date) }}
-                  selectsEnd
-                  startDate={analysisStart}
-                  endDate={analysisEnd}
-                  minDate={analysisStart}
-                  locale={ko}
-                  dateFormat="yyyy.MM.dd"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  calendarClassName="dark-calendar"
-                />
-              </div>
-            </div>
+            {/* 비교 기간 - 먼저 */}
             <div>
               <label className="text-xs text-gray-400 font-medium mb-2 block">비교 기간</label>
               <div className="flex items-center gap-2">
@@ -334,6 +306,51 @@ export default function AdvertiserInsightPage({
                   startDate={compareStart}
                   endDate={compareEnd}
                   minDate={compareStart}
+                  locale={ko}
+                  dateFormat="yyyy.MM.dd"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  calendarClassName="dark-calendar"
+                />
+              </div>
+            </div>
+            {/* 기준 기간 - 나중 + 동기간 버튼 */}
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-xs text-blue-400 font-medium">기준 기간</label>
+                <button
+                  onClick={() => {
+                    const duration = Math.round((compareEnd.getTime() - compareStart.getTime()) / 86400000)
+                    const yesterday = new Date(Date.now() - 86400000)
+                    yesterday.setHours(0, 0, 0, 0)
+                    const start = new Date(yesterday.getTime() - duration * 86400000)
+                    setAnalysisStart(start)
+                    setAnalysisEnd(yesterday)
+                  }}
+                  className="text-xs bg-blue-900 hover:bg-blue-700 text-blue-300 hover:text-white border border-blue-700 hover:border-blue-500 rounded px-2 py-0.5 transition-colors cursor-pointer"
+                >
+                  동기간
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <DatePicker
+                  selected={analysisStart}
+                  onChange={(date: Date | null) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }}
+                  selectsStart
+                  startDate={analysisStart}
+                  endDate={analysisEnd}
+                  locale={ko}
+                  dateFormat="yyyy.MM.dd"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                  calendarClassName="dark-calendar"
+                />
+                <span className="text-gray-600 text-xs flex-shrink-0">~</span>
+                <DatePicker
+                  selected={analysisEnd}
+                  onChange={(date: Date | null) => { if (date) setAnalysisEnd(date) }}
+                  selectsEnd
+                  startDate={analysisStart}
+                  endDate={analysisEnd}
+                  minDate={analysisStart}
                   locale={ko}
                   dateFormat="yyyy.MM.dd"
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
