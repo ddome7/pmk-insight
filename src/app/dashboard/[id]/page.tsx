@@ -285,7 +285,12 @@ export default function AdvertiserInsightPage({
           <div className="grid grid-cols-2 gap-6">
             {/* 비교 기간 - 먼저 */}
             <div>
-              <label className="text-xs text-gray-400 font-medium mb-2 block">비교 기간</label>
+              <div className="flex items-center gap-2 mb-2">
+                <label className="text-xs text-gray-400 font-medium">비교 기간</label>
+                <span className="text-xs text-gray-600">
+                  {Math.round((compareEnd.getTime() - compareStart.getTime()) / 86400000) + 1}일 선택됨
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <DatePicker
                   selected={compareStart}
@@ -328,7 +333,7 @@ export default function AdvertiserInsightPage({
                   }}
                   className="text-xs bg-blue-900 hover:bg-blue-700 text-blue-300 hover:text-white border border-blue-700 hover:border-blue-500 rounded px-2 py-0.5 transition-colors cursor-pointer"
                 >
-                  동기간
+                  동기간 선택하기
                 </button>
               </div>
               <div className="flex items-center gap-2">
