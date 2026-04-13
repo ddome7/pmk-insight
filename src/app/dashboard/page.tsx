@@ -73,6 +73,18 @@ export default function DashboardPage() {
     }
   }
 
+  const handleDeleteAgent = async () => {
+    if (!confirm('에이전트를 삭제하시겠습니까?')) return
+    const res = await fetch('/api/agent', { method: 'DELETE' })
+    if (res.ok) {
+      setAgent(null)
+      setAgentNameDraft('')
+      setAgentPersonaDraft('')
+      setAgentToneDraft('')
+      setShowAgentEditor(false)
+    }
+  }
+
   const handleSaveAgent = async () => {
     setSavingAgent(true)
     const res = await fetch('/api/agent', {
@@ -335,20 +347,30 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveAgent}
-                  disabled={savingAgent}
-                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
-                >
-                  {savingAgent ? '저장 중...' : '저장'}
-                </button>
-                <button
-                  onClick={() => setShowAgentEditor(false)}
-                  className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors"
-                >
-                  취소
-                </button>
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSaveAgent}
+                    disabled={savingAgent}
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs rounded-lg transition-colors"
+                  >
+                    {savingAgent ? '저장 중...' : '저장'}
+                  </button>
+                  <button
+                    onClick={() => setShowAgentEditor(false)}
+                    className="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition-colors"
+                  >
+                    취소
+                  </button>
+                </div>
+                {agent && (
+                  <button
+                    onClick={handleDeleteAgent}
+                    className="text-xs text-red-500 hover:text-red-400 transition-colors"
+                  >
+                    에이전트 삭제
+                  </button>
+                )}
               </div>
             </div>
           )}

@@ -1,5 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 
+// DELETE: 에이전트 삭제
+export async function DELETE() {
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return Response.json({ error: '인증이 필요합니다.' }, { status: 401 })
+
+    await supabase.from('manager_agents').delete().eq('user_id', user.id)
+    return Response.json({ success: true })
+  } catch (error) {
+    return Response.json({ error: String(error) }, { status: 500 })
+  }
+}
+
 // GET: 현재 유저의 에이전트 조회
 export async function GET() {
   try {

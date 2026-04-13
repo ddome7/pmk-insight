@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     if (user) {
       const { data: agentData } = await supabase
         .from('manager_agents')
-        .select('id, persona')
+        .select('id, agent_name, persona, tone')
         .eq('user_id', user.id)
         .single()
 
