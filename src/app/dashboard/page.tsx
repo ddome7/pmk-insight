@@ -81,6 +81,12 @@ export default function DashboardPage() {
     loadAdvertisers()
   }
 
+  const handleUngroup = async (e: React.MouseEvent, advertiserId: string) => {
+    e.stopPropagation()
+    await supabase.from('advertisers').update({ folder_id: null }).eq('id', advertiserId)
+    loadAdvertisers()
+  }
+
   const handleDeleteFolder = async (folderId: string) => {
     if (!confirm('폴더를 삭제하시겠습니까? 폴더 안의 광고주는 미분류로 이동됩니다.')) return
     await supabase
@@ -295,12 +301,21 @@ export default function DashboardPage() {
                   삭제
                 </button>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded">시트 연결됨</span>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded w-fit">시트 연결됨</span>
                 {adv.folder_id && (
-                  <span className="text-xs text-gray-600 truncate ml-1">
-                    {folders.find(f => f.id === adv.folder_id)?.name}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs text-gray-500 truncate">
+                      {folders.find(f => f.id === adv.folder_id)?.name}
+                    </span>
+                    <button
+                      onClick={(e) => handleUngroup(e, adv.id)}
+                      className="text-xs text-gray-700 hover:text-yellow-400 transition-colors flex-shrink-0"
+                      title="그룹 해제"
+                    >
+                      해제
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
