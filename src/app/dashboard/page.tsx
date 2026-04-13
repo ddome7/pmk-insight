@@ -178,7 +178,7 @@ export default function DashboardPage() {
               onDrop={handleDropOnUncategorized}
               onDragEnter={() => setDragOverFolderId('__uncategorized__')}
               onDragLeave={() => setDragOverFolderId(null)}
-              className={`px-4 py-2 rounded-lg text-sm transition-colors border ${
+              className={`px-6 py-3 rounded-xl text-sm font-medium transition-colors border ${
                 selectedFolderId === null
                   ? 'bg-blue-600 border-blue-500 text-white'
                   : dragOverFolderId === '__uncategorized__'
@@ -193,7 +193,7 @@ export default function DashboardPage() {
             {folders.map(folder => (
               <div
                 key={folder.id}
-                className={`flex items-center gap-1 rounded-lg text-sm transition-colors border ${
+                className={`flex items-center gap-1 rounded-xl text-sm font-medium transition-colors border ${
                   selectedFolderId === folder.id
                     ? 'bg-blue-600 border-blue-500 text-white'
                     : dragOverFolderId === folder.id
@@ -207,7 +207,7 @@ export default function DashboardPage() {
               >
                 <button
                   onClick={() => setSelectedFolderId(folder.id)}
-                  className="px-3 py-2"
+                  className="px-5 py-3"
                 >
                   {folder.name} ({getFolderCount(folder.id)})
                 </button>
@@ -274,44 +274,43 @@ export default function DashboardPage() {
         </div>
 
         {/* Advertiser Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {filteredAdvertisers.map(adv => (
             <div
               key={adv.id}
               draggable
               onDragStart={(e) => handleDragStart(e, adv.id)}
               onClick={() => router.push(`/dashboard/${adv.id}`)}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-600 cursor-pointer transition-colors"
+              className="bg-gray-900 border border-gray-800 rounded-lg p-3 hover:border-gray-600 cursor-pointer transition-colors"
             >
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="font-semibold text-white">{adv.advertiser_name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">담당: {adv.manager_name}</p>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1 min-w-0 mr-2">
+                  <p className="text-sm font-semibold text-white truncate">{adv.advertiser_name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 truncate">담당: {adv.manager_name}</p>
                 </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded-full">시트 연결됨</span>
-                  {adv.folder_id && (
-                    <span className="text-xs text-gray-600">
-                      {folders.find(f => f.id === adv.folder_id)?.name}
-                    </span>
-                  )}
-                  <button
-                    onClick={(e) => handleDeleteAdvertiser(e, adv.id)}
-                    className="text-xs text-gray-600 hover:text-red-400 transition-colors mt-1"
-                  >
-                    삭제
-                  </button>
-                </div>
+                <button
+                  onClick={(e) => handleDeleteAdvertiser(e, adv.id)}
+                  className="text-xs text-gray-700 hover:text-red-400 transition-colors flex-shrink-0"
+                >
+                  삭제
+                </button>
               </div>
-              <p className="text-xs text-gray-600 truncate">{adv.sheet_url}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded">시트 연결됨</span>
+                {adv.folder_id && (
+                  <span className="text-xs text-gray-600 truncate ml-1">
+                    {folders.find(f => f.id === adv.folder_id)?.name}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
 
           <div
             onClick={() => setShowModal(true)}
-            className="bg-gray-900 border border-dashed border-gray-700 rounded-xl p-6 flex flex-col items-center justify-center gap-3 text-gray-500 hover:border-gray-500 cursor-pointer transition-colors min-h-[120px]"
+            className="bg-gray-900 border border-dashed border-gray-700 rounded-lg p-3 flex flex-col items-center justify-center gap-2 text-gray-500 hover:border-gray-500 cursor-pointer transition-colors min-h-[80px]"
           >
-            <span className="text-3xl">+</span>
+            <span className="text-2xl">+</span>
             <span className="text-sm">광고주 추가</span>
           </div>
         </div>
