@@ -22,9 +22,20 @@ interface ColumnInterpretation {
   description: string
 }
 
+interface InsightItem {
+  title: string
+  description: string
+}
+
+interface NextStepItem {
+  type: string
+  action: string
+}
+
 interface InsightResult {
-  insights: string[]
-  nextSteps: string[]
+  insights: InsightItem[]
+  nextSteps: NextStepItem[]
+  report: string
 }
 
 export default function AdvertiserInsightPage({
@@ -53,6 +64,41 @@ export default function AdvertiserInsightPage({
   const [analysisEnd, setAnalysisEnd] = useState<Date>(new Date(Date.now() - 86400000))
   const [compareStart, setCompareStart] = useState<Date>(new Date(Date.now() - 86400000 * 2))
   const [compareEnd, setCompareEnd] = useState<Date>(new Date(Date.now() - 86400000 * 2))
+  const [weekendIncluded, setWeekendIncluded] = useState(false)
+
+  // 기준 기간 종료일이 월요일이면, 비교 기간을 전주 금요일로 자동 설정
+  const handleAnalysisEndChange = (date: Date | null) => {
+    if (!date) return
+    setAnalysisEnd(date)
+    if (date > analysisStart) setAnalysisStart(date)
+
+    const dayOfWeek = date.getDay() // 0=일,1=월,...,6=토
+    if (dayOfWeek === 1) {
+      const friday = new Date(date.getTime() - 3 * 86400000)
+      friday.setHours(0, 0, 0, 0)
+      setCompareStart(friday)
+      setCompareEnd(friday)
+      setWeekendIncluded(false)
+    }
+  }
+
+  const handleWeekendToggle = () => {
+    const nextIncluded = !weekendIncluded
+    setWeekendIncluded(nextIncluded)
+    if (nextIncluded) {
+      // 금요일 기준으로 일요일까지 확장
+      const friday = compareEnd.getDay() === 5 ? compareEnd
+        : compareStart.getDay() === 5 ? compareStart : compareEnd
+      const sunday = new Date(friday.getTime() + 2 * 86400000)
+      sunday.setHours(0, 0, 0, 0)
+      setCompareEnd(sunday)
+    } else {
+      // 일요일에서 금요일로 되돌리기
+      const friday = new Date(compareEnd.getTime() - 2 * 86400000)
+      friday.setHours(0, 0, 0, 0)
+      setCompareEnd(friday)
+    }
+  }
 
   useEffect(() => {
     loadAdvertiser()
@@ -290,6 +336,16 @@ export default function AdvertiserInsightPage({
                 <span className="text-xs text-gray-600">
                   {Math.round((compareEnd.getTime() - compareStart.getTime()) / 86400000) + 1}일 선택됨
                 </span>
+                <button
+                  onClick={handleWeekendToggle}
+                  className={`text-xs rounded px-2 py-0.5 border transition-colors cursor-pointer ${
+                    weekendIncluded
+                      ? 'bg-emerald-900 text-emerald-300 border-emerald-700 hover:bg-emerald-700'
+                      : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-gray-200'
+                  }`}
+                >
+                  주말포함
+                </button>
               </div>
               <div className="flex items-center gap-2">
                 <DatePicker
@@ -351,7 +407,7 @@ export default function AdvertiserInsightPage({
                 <span className="text-gray-600 text-xs flex-shrink-0">~</span>
                 <DatePicker
                   selected={analysisEnd}
-                  onChange={(date: Date | null) => { if (date) setAnalysisEnd(date) }}
+                  onChange={handleAnalysisEndChange}
                   selectsEnd
                   startDate={analysisStart}
                   endDate={analysisEnd}
@@ -409,7 +465,10 @@ export default function AdvertiserInsightPage({
                       <span className="flex-shrink-0 w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-sm font-bold">
                         {i + 1}
                       </span>
-                      <p className="text-sm text-gray-200 leading-relaxed">{insight}</p>
+                      <div>
+                        <p className="text-sm font-semibold text-white mb-1.5">{insight.title}</p>
+                        <p className="text-sm text-gray-400 leading-relaxed">{insight.description}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -418,15 +477,32 @@ export default function AdvertiserInsightPage({
 
             <div className="mb-8">
               <h3 className="text-sm font-medium text-gray-400 mb-4">Next Steps</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {insightResult.nextSteps.map((step, i) => (
-                  <div key={i} className="bg-gray-900 border border-blue-900 rounded-xl p-5">
-                    <p className="text-xs text-blue-400 font-medium mb-2">Step {i + 1}</p>
-                    <p className="text-sm text-gray-200 leading-relaxed">{step}</p>
+              <div className="flex flex-col gap-3">
+                {insightResult.nextSteps.map((ns, i) => (
+                  <div key={i} className={`bg-gray-900 border rounded-xl p-5 flex gap-3 items-start ${
+                    ns.type === '추천' ? 'border-blue-800' : 'border-gray-800'
+                  }`}>
+                    <span className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-md ${
+                      ns.type === '추천'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 text-gray-300'
+                    }`}>
+                      {ns.type}
+                    </span>
+                    <p className="text-sm text-gray-200 leading-relaxed pt-0.5">{ns.action}</p>
                   </div>
                 ))}
               </div>
             </div>
+
+            {insightResult.report && (
+              <div className="mb-8">
+                <h3 className="text-sm font-medium text-gray-400 mb-4">광고주 보고 멘트</h3>
+                <div className="bg-gray-900 border border-emerald-900 rounded-xl p-5">
+                  <p className="text-sm text-gray-200 leading-relaxed whitespace-pre-line">{insightResult.report}</p>
+                </div>
+              </div>
+            )}
           </>
         )}
 
