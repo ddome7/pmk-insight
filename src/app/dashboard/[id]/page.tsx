@@ -318,6 +318,15 @@ export default function AdvertiserInsightPage({
     }
   }
 
+  const renderReport = (text: string) => {
+    const parts = text.split(/\*\*(.+?)\*\*/g)
+    return parts.map((part, i) =>
+      i % 2 === 1
+        ? <strong key={i} className="font-bold text-blue-300">{part}</strong>
+        : <span key={i}>{part}</span>
+    )
+  }
+
   const buildInsightContext = (result: InsightResult) => {
     const insightLines = result.insights.map((ins, i) =>
       `인사이트 ${i + 1}: ${ins.title}\n${ins.description}`
@@ -618,7 +627,7 @@ export default function AdvertiserInsightPage({
                 </div>
                 <div className="relative bg-gradient-to-br from-gray-900 to-gray-900/60 border border-gray-700 rounded-2xl px-6 py-5">
                   <span className="absolute top-3 left-4 text-5xl text-gray-800 font-serif leading-none select-none">&ldquo;</span>
-                  <p className="text-sm text-gray-200 leading-7 whitespace-pre-line pl-5 relative z-10">{insightResult.report}</p>
+                  <p className="text-sm text-gray-200 leading-7 pl-5 relative z-10">{renderReport(insightResult.report)}</p>
                 </div>
               </section>
             )}
