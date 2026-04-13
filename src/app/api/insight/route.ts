@@ -1,6 +1,6 @@
-import Groq from 'groq-sdk'
+import Anthropic from '@anthropic-ai/sdk'
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 interface ColumnInterpretation {
   column: string
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     const headers: string[] = sheetData[0]
     const dataRows: string[][] = sheetData.slice(1)
-    const recentRows = dataRows.slice(-10)
+    const recentRows = dataRows.slice(-15)
 
     const columnDesc = (columnInterpretation as ColumnInterpretation[])
       .map((c) => `- ${c.column} (${c.type}): ${c.description}`)
@@ -31,12 +31,10 @@ export async function POST(request: Request) {
       .map((row: string[]) => row.map((cell: string) => (cell?.length > 100 ? cell.slice(0, 100) + '…' : cell)).join('\t'))
       .join('\n')
 
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        {
-          role: 'system',
-          content: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트를 제공합니다.
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주의 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트를 제공합니다.
 
 [절대 금지]
 - "A 수치가 B로 변했습니다" 같은 단순 수치 나열
@@ -51,9 +49,9 @@ export async function POST(request: Request) {
 
 [Next Step 기준]
 - 오늘 또는 이번 주 안에 실행 가능한 구체적 액션
-- "검토해보세요" 금지, "~를 ~% 늘리세요" 수준의 구체성
+- "검토해보세요" 금지, 구체적 수치와 방향이 포함된 액션
 
-반드시 아래 JSON 형식으로만 응답하세요:
+반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요:
 
 {
   "insights": [
@@ -69,7 +67,7 @@ export async function POST(request: Request) {
 }
 
 인사이트 3~5개, Next Step 정확히 3개. 모두 한국어.`,
-        },
+      messages: [
         {
           role: 'user',
           content: `광고주명: ${advertiserName || '미지정'}
@@ -83,11 +81,9 @@ ${dataPreview}
 이 데이터를 바탕으로 광고 성과 인사이트와 Next Step을 JSON으로 제시해주세요.`,
         },
       ],
-      temperature: 0.2,
-      max_tokens: 2048,
     })
 
-    const content = completion.choices[0]?.message?.content || ''
+    const content = message.content[0].type === 'text' ? message.content[0].text : ''
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
