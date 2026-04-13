@@ -288,7 +288,7 @@ export default function AdvertiserInsightPage({
               <div className="flex items-center gap-2">
                 <DatePicker
                   selected={analysisStart}
-                  onChange={(date) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }}
+                  onChange={(date: Date | null) => { if (date) { setAnalysisStart(date); if (date > analysisEnd) setAnalysisEnd(date) } }}
                   selectsStart
                   startDate={analysisStart}
                   endDate={analysisEnd}
@@ -300,7 +300,7 @@ export default function AdvertiserInsightPage({
                 <span className="text-gray-600 text-xs flex-shrink-0">~</span>
                 <DatePicker
                   selected={analysisEnd}
-                  onChange={(date) => { if (date) setAnalysisEnd(date) }}
+                  onChange={(date: Date | null) => { if (date) setAnalysisEnd(date) }}
                   selectsEnd
                   startDate={analysisStart}
                   endDate={analysisEnd}
@@ -317,7 +317,7 @@ export default function AdvertiserInsightPage({
               <div className="flex items-center gap-2">
                 <DatePicker
                   selected={compareStart}
-                  onChange={(date) => { if (date) { setCompareStart(date); if (date > compareEnd) setCompareEnd(date) } }}
+                  onChange={(date: Date | null) => { if (date) { setCompareStart(date); if (date > compareEnd) setCompareEnd(date) } }}
                   selectsStart
                   startDate={compareStart}
                   endDate={compareEnd}
@@ -329,7 +329,7 @@ export default function AdvertiserInsightPage({
                 <span className="text-gray-600 text-xs flex-shrink-0">~</span>
                 <DatePicker
                   selected={compareEnd}
-                  onChange={(date) => { if (date) setCompareEnd(date) }}
+                  onChange={(date: Date | null) => { if (date) setCompareEnd(date) }}
                   selectsEnd
                   startDate={compareStart}
                   endDate={compareEnd}

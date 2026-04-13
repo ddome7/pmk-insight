@@ -46,6 +46,7 @@ body {
 .dark-calendar .react-datepicker__day {
   color: #d1d5db !important;
   border-radius: 6px !important;
+  cursor: pointer !important;
 }
 .dark-calendar .react-datepicker__day:hover {
   background-color: #374151 !important;
