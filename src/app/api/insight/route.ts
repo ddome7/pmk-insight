@@ -19,6 +19,20 @@ interface NextStepItem {
   action: string
 }
 
+interface ColumnInterpretationExtended extends ColumnInterpretation {
+  description: string
+}
+
+interface ColumnSummary {
+  column: string
+  type: string
+  description: string
+  analysisValue: number | null
+  compareValue: number | null
+  delta: number | null
+  deltaPercent: number | null
+}
+
 interface HistoryRecord {
   analysis_start: string
   analysis_end: string
@@ -49,6 +63,84 @@ function filterRowsByDateRange(
     const normalized = cellVal.replace(/\./g, '-').replace(/\//g, '-')
     return normalized >= startDate && normalized <= endDate
   })
+}
+
+function parseNumber(val: string): number | null {
+  if (!val || val.trim() === '' || val.trim() === '-') return null
+  const cleaned = val.replace(/,/g, '').replace(/%/g, '').replace(/원/g, '').replace(/₩/g, '').trim()
+  const n = parseFloat(cleaned)
+  return isNaN(n) ? null : n
+}
+
+function computeSummary(
+  headers: string[],
+  analysisRows: string[][],
+  compareRows: string[][],
+  columnInterpretation: ColumnInterpretationExtended[]
+): ColumnSummary[] {
+  const numericTypes = ['지표', '숫자', '금액', '비율']
+
+  return columnInterpretation
+    .filter(c => numericTypes.includes(c.type))
+    .map(col => {
+      const colIdx = headers.findIndex(
+        h => h === col.column || h.includes(col.column) || col.column.includes(h)
+      )
+      if (colIdx === -1) return null
+
+      const isRate = col.type === '비율'
+
+      const extractValues = (rows: string[][]) =>
+        rows.map(r => parseNumber(r[colIdx] || '')).filter((v): v is number => v !== null)
+
+      const aVals = extractValues(analysisRows)
+      const cVals = extractValues(compareRows)
+
+      const aggregate = (vals: number[]) => {
+        if (vals.length === 0) return null
+        return isRate
+          ? vals.reduce((a, b) => a + b, 0) / vals.length
+          : vals.reduce((a, b) => a + b, 0)
+      }
+
+      const aVal = aggregate(aVals)
+      const cVal = aggregate(cVals)
+      const delta = aVal !== null && cVal !== null ? aVal - cVal : null
+      const deltaPercent =
+        delta !== null && cVal !== null && cVal !== 0 ? (delta / Math.abs(cVal)) * 100 : null
+
+      return { column: col.column, type: col.type, description: col.description, analysisValue: aVal, compareValue: cVal, delta, deltaPercent }
+    })
+    .filter((v): v is ColumnSummary => v !== null)
+}
+
+function formatSummaryTable(summary: ColumnSummary[], analysisLabel: string, compareLabel: string): string {
+  if (summary.length === 0) return '(집계 가능한 수치 컬럼 없음)'
+
+  const fmt = (v: number | null, type: string) => {
+    if (v === null) return '-'
+    if (type === '비율') return v.toFixed(2) + '%'
+    if (type === '금액') return '₩' + Math.round(v).toLocaleString()
+    return Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)
+  }
+
+  const fmtDelta = (v: number | null, pct: number | null, type: string) => {
+    if (v === null) return '-'
+    const sign = v >= 0 ? '+' : ''
+    const valStr = type === '비율'
+      ? `${sign}${v.toFixed(2)}%p`
+      : type === '금액'
+        ? `${sign}₩${Math.round(v).toLocaleString()}`
+        : `${sign}${Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)}`
+    const pctStr = pct !== null ? ` (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)` : ''
+    return valStr + pctStr
+  }
+
+  const header = `컬럼\t${analysisLabel}(기준)\t${compareLabel}(비교)\t증감`
+  const rows = summary.map(s =>
+    `${s.column}\t${fmt(s.analysisValue, s.type)}\t${fmt(s.compareValue, s.type)}\t${fmtDelta(s.delta, s.deltaPercent, s.type)}`
+  )
+  return [header, ...rows].join('\n')
 }
 
 function buildHistoryContext(history: HistoryRecord[]): string {
@@ -87,9 +179,16 @@ export async function POST(request: Request) {
     const useAnalysisRows = analysisRows.length > 0 ? analysisRows : dataRows.slice(-15)
     const useCompareRows = compareRows.length > 0 ? compareRows : []
 
-    const columnDesc = (columnInterpretation as ColumnInterpretation[])
+    const columnDesc = (columnInterpretation as ColumnInterpretationExtended[])
       .map((c) => `- ${c.column} (${c.type}): ${c.description}`)
       .join('\n')
+
+    // 서버에서 기간별 수치 집계 (AI가 직접 계산하지 않도록)
+    const summary = computeSummary(
+      headers, useAnalysisRows, useCompareRows,
+      columnInterpretation as ColumnInterpretationExtended[]
+    )
+    const summaryTable = formatSummaryTable(summary, analysisStart + '~' + analysisEnd, compareStart + '~' + compareEnd)
 
     const truncate = (cell: string) => cell?.length > 150 ? cell.slice(0, 150) + '…' : cell
 
@@ -165,10 +264,15 @@ export async function POST(request: Request) {
       max_tokens: 4096,
       system: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트와 보고서를 제공합니다.${agentPersonaContext}
 
+[수치 사용 원칙 — 최우선]
+- 유저 메시지의 "[기간별 집계 요약]" 표에 있는 수치를 그대로 사용하세요. 직접 계산하거나 추정하지 마세요.
+- 인사이트·보고서에 언급하는 모든 수치(합계, 평균, 증감률)는 이 표에서만 가져오세요.
+- 표에 없는 수치는 언급하지 마세요. "약 ~%" 등 추정 표현 금지.
+
 [인사이트 원칙]
 - 단순 수치 나열 금지. 반드시 원인과 비즈니스적 의미를 해석하세요.
 - 데이터에 없는 내용 추측 금지. 근거 있는 분석만 작성하세요.
-- 기준 기간과 비교 기간의 데이터를 실제로 비교 분석하세요.
+- 기준 기간과 비교 기간의 집계 요약을 실제로 비교 분석하세요.
 - 인사이트는 최대 5개, 유의미한 것만 선별하세요.
 - 과거 히스토리가 제공된 경우, 반복 패턴·지속 이슈·개선 여부를 반드시 언급하세요.
 
@@ -206,13 +310,21 @@ export async function POST(request: Request) {
 [컬럼 정의]
 ${columnDesc}
 
-[기준 기간 데이터]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[기간별 집계 요약 — 서버 사전 계산값]
+⚠️ 아래 수치는 서버에서 정확히 계산된 값입니다. 인사이트와 보고서에서 수치를 언급할 때는 반드시 이 표의 값을 그대로 사용하세요. 직접 재계산하지 마세요.
+
+${summaryTable}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[원본 데이터 — 행별 추이·패턴 파악용 참고 자료]
+기준 기간:
 ${analysisPreview}
 
-[비교 기간 데이터]
+비교 기간:
 ${comparePreview}${historyContext}
 
-위 데이터를 기반으로 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`,
+위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`,
         },
       ],
     })
