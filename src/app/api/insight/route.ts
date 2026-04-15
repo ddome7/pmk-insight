@@ -353,6 +353,10 @@ ${comparePreview}${historyContext}
       insights: normalizedInsights,
       nextSteps: normalizedNextSteps,
       report: parsed.report || '',
+      summaryTable,
+      analysisRows: useAnalysisRows,
+      compareRows: useCompareRows,
+      headers,
     }
 
     // 히스토리 저장 (광고주 ID가 있는 경우)

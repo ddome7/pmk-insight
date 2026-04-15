@@ -36,6 +36,10 @@ interface InsightResult {
   insights: InsightItem[]
   nextSteps: NextStepItem[]
   report: string
+  summaryTable?: string
+  analysisRows?: string[][]
+  compareRows?: string[][]
+  headers?: string[]
 }
 
 interface HistoryEntry {
@@ -366,6 +370,14 @@ export default function AdvertiserInsightPage({
           messages: newMessages,
           insightContext: buildInsightContext(insightResult),
           advertiserName: advertiser?.advertiser_name,
+          summaryTable: insightResult.summaryTable,
+          analysisRows: insightResult.analysisRows,
+          compareRows: insightResult.compareRows,
+          headers: insightResult.headers,
+          analysisStart: toDateStr(analysisStart),
+          analysisEnd: toDateStr(analysisEnd),
+          compareStart: toDateStr(compareStart),
+          compareEnd: toDateStr(compareEnd),
         }),
       })
       const data = await res.json()
