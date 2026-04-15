@@ -435,7 +435,7 @@ export default function AdvertiserInsightPage({
         >
           ← 대시보드
         </button>
-        <h1 className="text-lg font-bold">PMK Insight</h1>
+        <h1 className="text-lg font-bold cursor-pointer hover:text-blue-400 transition-colors" onClick={() => router.push('/dashboard')}>PMK Insight</h1>
         {insightResult && (
           <span className="ml-auto text-xs text-emerald-400 bg-emerald-950 border border-emerald-800 px-2 py-0.5 rounded-md">
             추가 질문 활성화됨

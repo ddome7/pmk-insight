@@ -88,7 +88,7 @@ export default function AdminPage() {
         >
           ← 대시보드
         </button>
-        <h1 className="text-lg font-bold">PMK Insight</h1>
+        <h1 className="text-lg font-bold cursor-pointer hover:text-blue-400 transition-colors" onClick={() => router.push('/dashboard')}>PMK Insight</h1>
         <span className="text-xs font-semibold text-amber-400 bg-amber-950 border border-amber-800 px-2 py-0.5 rounded-md">관리자 패널</span>
       </header>
 
