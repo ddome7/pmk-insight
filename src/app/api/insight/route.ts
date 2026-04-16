@@ -190,13 +190,17 @@ export async function POST(request: Request) {
     )
     const summaryTable = formatSummaryTable(summary, analysisStart + '~' + analysisEnd, compareStart + '~' + compareEnd)
 
-    const truncate = (cell: string) => cell?.length > 150 ? cell.slice(0, 150) + '…' : cell
+    const truncate = (cell: string) => cell?.length > 100 ? cell.slice(0, 100) + '…' : cell
 
-    const analysisPreview = [headers, ...useAnalysisRows]
+    // 원본 행은 최대 50행으로 제한 (토큰 절감)
+    const CAP = 50
+    const analysisPreview = [headers, ...useAnalysisRows.slice(0, CAP)]
       .map(row => row.map(truncate).join('\t')).join('\n')
+      + (useAnalysisRows.length > CAP ? `\n… (${useAnalysisRows.length - CAP}행 생략)` : '')
 
     const comparePreview = useCompareRows.length > 0
-      ? [headers, ...useCompareRows].map(row => row.map(truncate).join('\t')).join('\n')
+      ? [headers, ...useCompareRows.slice(0, CAP)].map(row => row.map(truncate).join('\t')).join('\n')
+        + (useCompareRows.length > CAP ? `\n… (${useCompareRows.length - CAP}행 생략)` : '')
       : '(해당 기간 데이터 없음)'
 
     // 광고주 히스토리 조회 (최근 5회) + 매니저 에이전트 조회
@@ -354,9 +358,6 @@ ${comparePreview}${historyContext}
       nextSteps: normalizedNextSteps,
       report: parsed.report || '',
       summaryTable,
-      analysisRows: useAnalysisRows,
-      compareRows: useCompareRows,
-      headers,
     }
 
     // 히스토리 저장 (광고주 ID가 있는 경우)
