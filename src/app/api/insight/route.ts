@@ -326,7 +326,7 @@ ${comparePreview}${historyContext}
 위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`
 
     const geminiModel = genAI.getGenerativeModel({
-      model: 'gemini-3.0-flash',
+      model: 'gemini-3.0-pro',
       systemInstruction,
       generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
     })
