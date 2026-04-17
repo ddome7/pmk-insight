@@ -1,7 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 interface ColumnInterpretation {
   column: string
@@ -263,10 +263,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4096,
-      system: `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트와 보고서를 제공합니다.${agentPersonaContext}
+    const systemInstruction = `당신은 10년 경력의 디지털 광고 퍼포먼스 마케터입니다. 광고주 데이터를 분석해 실무에서 즉시 활용 가능한 인사이트와 보고서를 제공합니다.${agentPersonaContext}
 
 [수치 사용 원칙 — 최우선]
 - 유저 메시지의 "[기간별 집계 요약]" 표에 있는 수치를 그대로 사용하세요. 직접 계산하거나 추정하지 마세요.
@@ -292,7 +289,7 @@ export async function POST(request: Request) {
 - 3~5문장으로 간결하게 작성하세요.
 - 핵심 수치, 중요한 키워드, 주목해야 할 변화는 반드시 **텍스트** 형식으로 강조하세요. (예: **ROAS 2.4배**, **전주 대비 +32%**, **노출 급감**)
 
-반드시 아래 JSON 형식으로만 응답하세요:
+반드시 아래 JSON 형식으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요:
 
 {
   "insights": [
@@ -303,11 +300,9 @@ export async function POST(request: Request) {
     { "type": "고려", "action": "선택적으로 검토할 액션" }
   ],
   "report": "광고주에게 보고할 내용을 자연스러운 문장으로 작성"
-}`,
-      messages: [
-        {
-          role: 'user',
-          content: `광고주명: ${advertiserName || '미지정'}
+}`
+
+    const userPrompt = `광고주명: ${advertiserName || '미지정'}
 기준 기간: ${analysisStart} ~ ${analysisEnd} (${useAnalysisRows.length}행)
 비교 기간: ${compareStart} ~ ${compareEnd} (${useCompareRows.length}행)
 
@@ -328,12 +323,16 @@ ${analysisPreview}
 비교 기간:
 ${comparePreview}${historyContext}
 
-위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`,
-        },
-      ],
+위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`
+
+    const geminiModel = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      systemInstruction,
+      generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
     })
 
-    const content = message.content[0].type === 'text' ? message.content[0].text : ''
+    const geminiResult = await geminiModel.generateContent(userPrompt)
+    const content = geminiResult.response.text()
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
