@@ -1,7 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -38,18 +38,24 @@ ${insightContext ? `[AI 인사이트 요약]\n${insightContext}` : ''}
 - 데이터에 없는 내용은 추측하지 마세요.
 - 간결하게 한국어로 답변하세요.`
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: (messages as ChatMessage[]).map(m => ({
-        role: m.role,
-        content: m.content,
-      })),
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3.0-flash-pro',
+      systemInstruction: systemPrompt,
     })
 
-    const content = response.content[0].type === 'text' ? response.content[0].text : ''
-    return Response.json({ reply: content })
+    // Gemini history: 마지막 메시지 제외한 이전 대화
+    const history = (messages as ChatMessage[]).slice(0, -1).map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }))
+
+    const lastMessage = (messages as ChatMessage[]).at(-1)!
+
+    const chat = model.startChat({ history })
+    const result = await chat.sendMessage(lastMessage.content)
+    const reply = result.response.text()
+
+    return Response.json({ reply })
   } catch (error) {
     console.error('[api/chat] Error:', error)
     return Response.json({ error: String(error) }, { status: 500 })
