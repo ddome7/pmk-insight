@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 export async function POST(request: Request) {
   try {
@@ -17,13 +17,9 @@ export async function POST(request: Request) {
       .map((row: string[]) => row.join('\t'))
       .join('\n')
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      messages: [
-        {
-          role: 'user',
-          content: `당신은 광고 데이터 분석 전문가입니다. 스프레드시트의 헤더와 샘플 데이터를 보고, 각 컬럼이 무엇을 의미하는지 해석해주세요.
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.0-flash-pro' })
+
+    const prompt = `당신은 광고 데이터 분석 전문가입니다. 스프레드시트의 헤더와 샘플 데이터를 보고, 각 컬럼이 무엇을 의미하는지 해석해주세요.
 
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트는 포함하지 마세요.
 
@@ -39,12 +35,10 @@ export async function POST(request: Request) {
 
 다음 스프레드시트 데이터의 각 컬럼을 해석해주세요:
 
-${dataPreview}`,
-        },
-      ],
-    })
+${dataPreview}`
 
-    const content = message.content[0].type === 'text' ? message.content[0].text : ''
+    const result = await model.generateContent(prompt)
+    const content = result.response.text()
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
