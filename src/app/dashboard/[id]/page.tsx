@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { ko } from 'date-fns/locale'
+import FeedbackButton from '@/components/FeedbackButton'
 
 interface Advertiser {
   id: string
@@ -787,6 +788,8 @@ export default function AdvertiserInsightPage({
         </aside>
       )}
       </div>
+
+      <FeedbackButton pageId="pmk-insight-detail" defaultSection="인사이트 페이지" />
     </div>
   )
 }

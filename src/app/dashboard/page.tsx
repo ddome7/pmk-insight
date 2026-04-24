@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AddAdvertiserModal from '@/components/AddAdvertiserModal'
+import FeedbackButton from '@/components/FeedbackButton'
 
 interface Advertiser {
   id: string
@@ -391,6 +392,14 @@ export default function DashboardPage() {
               className="text-xs text-amber-400 hover:text-amber-300 transition-colors border border-amber-800 hover:border-amber-600 rounded px-2 py-1"
             >
               관리자 패널
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={() => router.push('/dashboard/feedback')}
+              className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 rounded px-2 py-1"
+            >
+              📬 피드백
             </button>
           )}
           <button onClick={handleSignOut} className="text-xs text-gray-500 hover:text-white transition-colors">
@@ -835,6 +844,8 @@ export default function DashboardPage() {
           onSuccess={() => { setShowModal(false); loadAdvertisers() }}
         />
       )}
+
+      <FeedbackButton pageId="pmk-insight-dashboard" defaultSection="대시보드" />
     </div>
   )
 }
