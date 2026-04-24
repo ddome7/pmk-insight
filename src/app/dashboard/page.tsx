@@ -845,7 +845,7 @@ export default function DashboardPage() {
         />
       )}
 
-      <FeedbackButton pageId="pmk-insight-dashboard" defaultSection="대시보드" />
+      <FeedbackButton pageId="pmk-insight-dashboard" />
     </div>
   )
 }

@@ -789,7 +789,7 @@ export default function AdvertiserInsightPage({
       )}
       </div>
 
-      <FeedbackButton pageId="pmk-insight-detail" defaultSection="인사이트 페이지" />
+      <FeedbackButton pageId="pmk-insight-detail" />
     </div>
   )
 }
