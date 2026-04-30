@@ -201,10 +201,12 @@ export default function DashboardPage() {
     if (!trimmed) return
     setCreatingFolder(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setCreatingFolder(false); return }
-
-    await supabase.from('folders').insert({ user_id: user.id, name: trimmed, parent_id: currentFolderId ?? null })
+    // 폴더는 전체 매니저가 공유 — user_id 미저장 (RLS는 006_folders_shared.sql에서 인증된 사용자 전체 허용으로 변경)
+    const { error } = await supabase.from('folders').insert({ name: trimmed, parent_id: currentFolderId ?? null })
+    if (error) {
+      console.error('[folders] insert 실패:', error)
+      alert('폴더 생성에 실패했습니다: ' + error.message)
+    }
     setNewFolderName('')
     setShowFolderInput(false)
     setCreatingFolder(false)

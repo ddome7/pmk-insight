@@ -98,14 +98,18 @@ ${dataPreview}
       )
     }
 
-    // responseMimeType: 'application/json' 적용으로 순수 JSON 응답 보장
-    // 안전망: 마크다운 코드블록이 포함될 경우 제거 후 파싱
-    let parsed: InterpretResult
+    // responseMimeType: 'application/json' 적용으로 순수 JSON 응답 보장.
+    // 안전망:
+    //  1) 마크다운 코드블록 포함 시 제거 후 파싱
+    //  2) 모델이 {columns:[...]} 대신 [...] (배열만) 반환하는 케이스 정규화
+    //     — Gemini 2.5 pro가 배열로 반환하는 사례가 실측됨 (Vercel 로그 확인)
+    let raw: unknown
     try {
-      parsed = JSON.parse(content) as InterpretResult
+      raw = JSON.parse(content)
     } catch {
       const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
-      const jsonMatch = stripped.match(/\{[\s\S]*\}/)
+      // 객체 또는 배열 모두 매칭
+      const jsonMatch = stripped.match(/\{[\s\S]*\}|\[[\s\S]*\]/)
       if (!jsonMatch) {
         console.error('[api/interpret] JSON 파싱 실패 — 원본 응답 전체:', content)
         return Response.json(
@@ -116,8 +120,35 @@ ${dataPreview}
           { status: 500 }
         )
       }
-      parsed = JSON.parse(jsonMatch[0]) as InterpretResult
+      raw = JSON.parse(jsonMatch[0])
     }
+
+    // 모델 응답 형태 정규화 → 항상 { columns: [...] }
+    type ColumnRow = { column: string; type: string; description: string }
+    let columns: ColumnRow[]
+    if (Array.isArray(raw)) {
+      columns = raw as ColumnRow[]
+    } else if (raw && typeof raw === 'object' && Array.isArray((raw as { columns?: unknown }).columns)) {
+      columns = (raw as { columns: ColumnRow[] }).columns
+    } else {
+      console.error('[api/interpret] 예상 못한 응답 구조 — 원본:', content?.slice(0, 800))
+      return Response.json(
+        {
+          error: 'AI 응답 구조가 올바르지 않습니다. (columns 배열을 찾을 수 없음)',
+          _debug: { finishReason, usage, contentPreview: content?.slice(0, 500) },
+        },
+        { status: 500 }
+      )
+    }
+
+    if (columns.length === 0) {
+      return Response.json(
+        { error: 'AI가 컬럼을 한 개도 분류하지 못했습니다. 시트의 헤더를 확인해주세요.' },
+        { status: 500 }
+      )
+    }
+
+    const parsed: InterpretResult = { columns }
 
     // 캐시 저장 (LRU 흉내: 초과 시 가장 오래된 키 제거)
     if (interpretCache.size >= CACHE_MAX) {

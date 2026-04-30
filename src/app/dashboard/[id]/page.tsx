@@ -222,6 +222,7 @@ export default function AdvertiserInsightPage({
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         const msg = errorData?.error || response.statusText
+        setStep('idle')
         setSheetError(msg)
         setFetchingSheet(false)
         return
@@ -231,6 +232,7 @@ export default function AdvertiserInsightPage({
       const values: string[][] = result.values || []
 
       if (values.length === 0) {
+        setStep('idle')
         setSheetError('시트에 데이터가 없습니다.')
         setFetchingSheet(false)
         return
@@ -239,6 +241,7 @@ export default function AdvertiserInsightPage({
       setSheetData(values)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') { setFetchingSheet(false); return }
+      setStep('idle')
       setSheetError(`오류가 발생했습니다: ${err instanceof Error ? err.message : String(err)}`)
     }
     setFetchingSheet(false)
@@ -268,9 +271,17 @@ export default function AdvertiserInsightPage({
       }
 
       const data = await response.json()
-      setColumnInterpretation(data.columns)
+      // 정규화: 서버는 { columns: [...] }을 반환하지만, 과거 빌드/캐시 등으로
+      // 배열 자체가 직접 반환되는 케이스도 방어적으로 수용한다.
+      const columns = Array.isArray(data) ? data : data?.columns
+      if (!Array.isArray(columns) || columns.length === 0) {
+        throw new Error('컬럼 해석 응답이 비어 있거나 형식이 올바르지 않습니다.')
+      }
+      setColumnInterpretation(columns)
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') { setInterpretingColumns(false); return }
+      // step을 idle로 되돌려야 다음 useEffect 체인이 영구 정지되지 않음
+      setStep('idle')
       setSheetError(`컬럼 해석 오류: ${err instanceof Error ? err.message : String(err)}`)
     }
     setInterpretingColumns(false)
@@ -310,6 +321,7 @@ export default function AdvertiserInsightPage({
       loadHistory()
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') { setGeneratingInsight(false); return }
+      setStep('idle')
       setSheetError(`인사이트 생성 오류: ${err instanceof Error ? err.message : String(err)}`)
     }
     setGeneratingInsight(false)
