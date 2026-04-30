@@ -69,8 +69,6 @@ export default function FeedbackButton({ pageId = 'pmk-insight', sections }: Fee
     }
   }
 
-  if (!isAdmin) return null
-
   const PRIORITY_OPTIONS = [
     { value: 'high',   label: '🔴 높음', active: 'bg-red-950 border-red-700 text-red-300' },
     { value: 'medium', label: '🟡 보통', active: 'bg-amber-950 border-amber-700 text-amber-300' },
