@@ -540,7 +540,7 @@ export default function AdvertiserInsightPage({
               </button>
             )}
           </div>
-          {sheetError && <p className="text-red-400 text-xs mt-3 pl-1">{sheetError}</p>}
+          {sheetError && <p className="text-red-400 text-xs mt-3 pl-1 select-text cursor-text break-all">{sheetError}</p>}
         </div>
 
         {/* Column Interpretation - collapsed by default */}

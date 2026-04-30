@@ -350,8 +350,6 @@ ${comparePreview}${historyContext}
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 2048,
-          // @ts-expect-error thinkingConfig: gemini-2.5 thinking 비활성화 (JSON 파싱 안정화)
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
       const geminiResult = await geminiModel.generateContent(userPrompt)

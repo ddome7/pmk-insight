@@ -74,8 +74,6 @@ ${dataPreview}
         systemInstruction: SYSTEM_INSTRUCTION,
         generationConfig: {
           temperature: 0.1,
-          // @ts-expect-error thinkingConfig: gemini-2.5 thinking 비활성화 (JSON 파싱 안정화)
-          thinkingConfig: { thinkingBudget: 0 },
         },
       })
       const result = await model.generateContent(prompt)
