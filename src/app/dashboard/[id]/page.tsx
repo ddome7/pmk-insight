@@ -81,6 +81,12 @@ export default function AdvertiserInsightPage({
   const [showHistory, setShowHistory] = useState(false)
   const [copiedReport, setCopiedReport] = useState(false)
 
+  // 시트 URL 수정
+  const [editingSheetUrl, setEditingSheetUrl] = useState(false)
+  const [sheetUrlInput, setSheetUrlInput] = useState('')
+  const [sheetUrlError, setSheetUrlError] = useState('')
+  const [savingSheetUrl, setSavingSheetUrl] = useState(false)
+
   // 패널 크기 조절
   const [rightPanelPct, setRightPanelPct] = useState(20)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -190,9 +196,15 @@ export default function AdvertiserInsightPage({
     setLoading(false)
   }
 
-  const extractSpreadsheetId = (url: string): string | null => {
-    const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
-    return match ? match[1] : null
+  const extractSheetInfo = (url: string): { spreadsheetId: string; gid: string | null } | null => {
+    const idMatch = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+    if (!idMatch) return null
+    // gid는 #gid=XXXX 또는 ?gid=XXXX 또는 &gid=XXXX 형태로 등장
+    const gidMatch = url.match(/[#?&]gid=([0-9]+)/)
+    return {
+      spreadsheetId: idMatch[1],
+      gid: gidMatch ? gidMatch[1] : null,
+    }
   }
 
   const fetchSheetData = useCallback(async () => {
@@ -201,12 +213,13 @@ export default function AdvertiserInsightPage({
     setSheetError('')
 
     try {
-      const spreadsheetId = extractSpreadsheetId(advertiser.sheet_url)
-      if (!spreadsheetId) {
+      const sheetInfo = extractSheetInfo(advertiser.sheet_url)
+      if (!sheetInfo) {
         setSheetError('올바르지 않은 스프레드시트 URL입니다.')
         setFetchingSheet(false)
         return
       }
+      const { spreadsheetId, gid } = sheetInfo
 
       // provider_token 획득 시도 (로그인 직후에만 유효, 새로고침 후 null 가능)
       const { data: { session } } = await supabase.auth.getSession()
@@ -215,7 +228,7 @@ export default function AdvertiserInsightPage({
       const response = await fetch('/api/sheets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spreadsheetId, providerToken }),
+        body: JSON.stringify({ spreadsheetId, gid, providerToken }),
         signal: abortControllerRef.current?.signal,
       })
 
@@ -362,6 +375,58 @@ export default function AdvertiserInsightPage({
     return `${insightLines}\n\nNext Steps:\n${nextStepLines}${reportLine}`
   }
 
+  const openSheetUrlEditor = () => {
+    if (!advertiser) return
+    setSheetUrlInput(advertiser.sheet_url)
+    setSheetUrlError('')
+    setEditingSheetUrl(true)
+  }
+
+  const closeSheetUrlEditor = () => {
+    setEditingSheetUrl(false)
+    setSheetUrlError('')
+  }
+
+  const saveSheetUrl = async () => {
+    if (!advertiser) return
+    const trimmed = sheetUrlInput.trim()
+    if (!trimmed) {
+      setSheetUrlError('URL을 입력해주세요.')
+      return
+    }
+    if (!trimmed.includes('docs.google.com/spreadsheets')) {
+      setSheetUrlError('Google 스프레드시트 URL이어야 합니다 (docs.google.com/spreadsheets 포함).')
+      return
+    }
+    if (!extractSheetInfo(trimmed)) {
+      setSheetUrlError('스프레드시트 ID를 추출할 수 없습니다. URL 형식을 확인해주세요.')
+      return
+    }
+
+    setSavingSheetUrl(true)
+    setSheetUrlError('')
+
+    const { error } = await supabase
+      .from('advertisers')
+      .update({ sheet_url: trimmed })
+      .eq('id', advertiser.id)
+
+    setSavingSheetUrl(false)
+
+    if (error) {
+      setSheetUrlError(`저장 실패: ${error.message}`)
+      return
+    }
+
+    // 페이지 새로고침 없이 state 업데이트
+    setAdvertiser({ ...advertiser, sheet_url: trimmed })
+    // URL이 바뀌었으니 캐시된 시트 데이터/해석/인사이트 모두 폐기
+    setSheetData(null)
+    setColumnInterpretation(null)
+    setInsightResult(null)
+    setEditingSheetUrl(false)
+  }
+
   const deleteHistoryEntry = async (entryId: string) => {
     if (!confirm('이 인사이트 히스토리를 삭제하시겠습니까?\n해당 기간의 학습 데이터도 함께 제거됩니다.')) return
     const { error } = await supabase.from('insight_history').delete().eq('id', entryId)
@@ -474,15 +539,77 @@ export default function AdvertiserInsightPage({
             <h2 className="text-2xl font-bold text-white tracking-tight">{advertiser.advertiser_name}</h2>
             <p className="text-sm text-gray-500 mt-0.5">담당: {advertiser.manager_name}</p>
           </div>
-          <a
-            href={advertiser.sheet_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 bg-gray-900 px-3 py-1.5 rounded-lg"
-          >
-            시트 열기 ↗
-          </a>
+          <div className="flex items-center gap-2">
+            <a
+              href={advertiser.sheet_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 bg-gray-900 px-3 py-1.5 rounded-lg"
+            >
+              시트 열기 ↗
+            </a>
+            <button
+              onClick={openSheetUrlEditor}
+              className="text-xs text-gray-400 hover:text-white transition-colors border border-gray-700 hover:border-gray-500 bg-gray-900 px-3 py-1.5 rounded-lg"
+              title="시트 URL 수정"
+            >
+              URL 수정 ✎
+            </button>
+          </div>
         </div>
+
+        {/* Sheet URL 수정 모달 */}
+        {editingSheetUrl && (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center px-4"
+            onClick={closeSheetUrlEditor}
+          >
+            <div
+              className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-white">시트 URL 수정</h3>
+                <button
+                  onClick={closeSheetUrlEditor}
+                  className="text-gray-500 hover:text-white text-sm"
+                  aria-label="닫기"
+                >✕</button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Google 스프레드시트 URL을 입력하세요. 특정 탭(<span className="text-gray-300 font-mono">#gid=…</span>)이 포함된 URL이면 해당 탭을 읽습니다.
+              </p>
+              <input
+                type="url"
+                value={sheetUrlInput}
+                onChange={(e) => setSheetUrlInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !savingSheetUrl) { e.preventDefault(); saveSheetUrl() }
+                  if (e.key === 'Escape') { e.preventDefault(); closeSheetUrlEditor() }
+                }}
+                placeholder="https://docs.google.com/spreadsheets/d/..../edit#gid=0"
+                disabled={savingSheetUrl}
+                autoFocus
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              />
+              {sheetUrlError && (
+                <p className="text-red-400 text-xs mt-2 break-all">{sheetUrlError}</p>
+              )}
+              <div className="flex justify-end gap-2 mt-5">
+                <button
+                  onClick={closeSheetUrlEditor}
+                  disabled={savingSheetUrl}
+                  className="text-xs text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 bg-gray-900 px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                >취소</button>
+                <button
+                  onClick={saveSheetUrl}
+                  disabled={savingSheetUrl}
+                  className="text-xs text-white bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 px-4 py-2 rounded-lg transition-colors"
+                >{savingSheetUrl ? '저장 중...' : '저장'}</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Date Selection */}
         <div className="bg-gray-900/80 border border-gray-800 rounded-2xl p-5 mb-5">
