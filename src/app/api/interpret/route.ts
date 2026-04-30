@@ -67,6 +67,7 @@ ${dataPreview}
 응답 JSON 형식:
 {"columns":[{"column":"원본 헤더명","type":"날짜|지표|텍스트|숫자|비율|금액","description":"의미 1~2문장"}]}`
 
+    // interpret는 retry sleep 없이 1회 시도 (sleep이 Vercel 타임아웃 악화)
     const content = await withRetry(async () => {
       const model = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
@@ -75,7 +76,7 @@ ${dataPreview}
       })
       const result = await model.generateContent(prompt)
       return result.response.text()
-    }, 'api/interpret')
+    }, 'api/interpret', 0)
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
