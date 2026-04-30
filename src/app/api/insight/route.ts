@@ -347,13 +347,20 @@ ${comparePreview}${historyContext}
       const geminiModel = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction,
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
+          // @ts-expect-error thinkingConfig: gemini-2.5 thinking 비활성화 (JSON 파싱 안정화)
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       })
       const geminiResult = await geminiModel.generateContent(userPrompt)
       return geminiResult.response.text()
     }, 'api/insight', 0)
 
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    // 마크다운 코드블록 제거 후 JSON 추출
+    const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return Response.json({ error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' }, { status: 500 })
     }

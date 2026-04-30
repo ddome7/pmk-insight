@@ -72,13 +72,19 @@ ${dataPreview}
       const model = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction: SYSTEM_INSTRUCTION,
-        generationConfig: { temperature: 0.1 },
+        generationConfig: {
+          temperature: 0.1,
+          // @ts-expect-error thinkingConfig: gemini-2.5 thinking 비활성화 (JSON 파싱 안정화)
+          thinkingConfig: { thinkingBudget: 0 },
+        },
       })
       const result = await model.generateContent(prompt)
       return result.response.text()
     }, 'api/interpret', 0)
 
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
+    // 마크다운 코드블록 제거 후 JSON 추출
+    const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
+    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return Response.json(
         { error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' },
