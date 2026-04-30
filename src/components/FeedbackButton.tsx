@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 interface FeedbackButtonProps {
   pageId?: string
@@ -31,7 +31,6 @@ const DEFAULT_SECTIONS_INSIGHT = [
 ]
 
 export default function FeedbackButton({ pageId = 'pmk-insight', sections }: FeedbackButtonProps) {
-  const [isAdmin, setIsAdmin] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [section, setSection] = useState('전체')
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium')
@@ -42,15 +41,6 @@ export default function FeedbackButton({ pageId = 'pmk-insight', sections }: Fee
   const sectionOptions = sections ?? (
     pageId === 'pmk-insight-detail' ? DEFAULT_SECTIONS_INSIGHT : DEFAULT_SECTIONS_DASHBOARD
   )
-
-  useEffect(() => {
-    const cached = localStorage.getItem('pmk_isAdmin') === 'true'
-    setIsAdmin(cached)
-    fetch('/api/admin').then(r => r.json()).then(d => {
-      setIsAdmin(d.isAdmin)
-      localStorage.setItem('pmk_isAdmin', d.isAdmin ? 'true' : 'false')
-    }).catch(() => {})
-  }, [])
 
   const showToast = (msg: string, type: 'success' | 'error') => {
     setToast({ msg, type })
