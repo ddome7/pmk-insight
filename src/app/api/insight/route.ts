@@ -1,9 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
+import { GEMINI_MODEL, genAI, withRetry } from '@/lib/gemini'
 
 export const maxDuration = 60
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 interface ColumnInterpretation {
   column: string
@@ -205,63 +203,60 @@ export async function POST(request: Request) {
         + (useCompareRows.length > CAP ? `\n… (${useCompareRows.length - CAP}행 생략)` : '')
       : '(해당 기간 데이터 없음)'
 
-    // 광고주 히스토리 조회 (최근 5회) + 매니저 에이전트 조회
+    // 광고주 히스토리 + 매니저 에이전트 조회 (병렬화)
     let historyContext = ''
     let agentPersonaContext = ''
     const supabase = await createClient()
 
-    // 현재 로그인 유저 확인
+    // 1단계: 현재 로그인 유저 확인 (이후 쿼리들이 user.id 의존)
     const { data: { user } } = await supabase.auth.getUser()
 
-    // 광고주 소유자 확인 (담당 매니저 판별)
-    let isOwnAdvertiser = false
-    if (advertiserId && user) {
-      const { data: advData } = await supabase
-        .from('advertisers')
-        .select('user_id')
-        .eq('id', advertiserId)
-        .single()
-      isOwnAdvertiser = advData?.user_id === user.id
+    // 2단계: advertiser 소유자 / history / manager_agents 병렬 조회
+    const [advRes, historyRes, agentRes] = await Promise.all([
+      advertiserId && user
+        ? supabase.from('advertisers').select('user_id').eq('id', advertiserId).single()
+        : Promise.resolve({ data: null as { user_id: string } | null }),
+      advertiserId
+        ? supabase
+            .from('insight_history')
+            .select('analysis_start, analysis_end, result')
+            .eq('advertiser_id', advertiserId)
+            .order('created_at', { ascending: false })
+            .limit(5)
+        : Promise.resolve({ data: null as HistoryRecord[] | null }),
+      user
+        ? supabase
+            .from('manager_agents')
+            .select('id, agent_name, persona, tone')
+            .eq('user_id', user.id)
+            .single()
+        : Promise.resolve({ data: null as { id: string; agent_name: string; persona: string; tone: string } | null }),
+    ])
+
+    const isOwnAdvertiser = !!(advRes.data && user && advRes.data.user_id === user.id)
+
+    const historyData = historyRes.data
+    if (historyData && historyData.length > 0) {
+      historyContext = buildHistoryContext([...historyData].reverse() as HistoryRecord[])
     }
 
-    if (advertiserId) {
-      const { data: historyData } = await supabase
-        .from('insight_history')
-        .select('analysis_start, analysis_end, result')
-        .eq('advertiser_id', advertiserId)
-        .order('created_at', { ascending: false })
-        .limit(5)
-
-      if (historyData && historyData.length > 0) {
-        historyContext = buildHistoryContext([...historyData].reverse() as HistoryRecord[])
-      }
-    }
-
-    // 매니저 에이전트 조회 (본인 광고주일 때만 적용)
-    if (user) {
-      const { data: agentData } = await supabase
-        .from('manager_agents')
-        .select('id, agent_name, persona, tone')
-        .eq('user_id', user.id)
-        .single()
-
-      if (!agentData) {
-        await supabase.from('manager_agents').insert({
-          user_id: user.id,
-          manager_name: advertiserName || '매니저',
-          agent_name: '',
-          persona: '',
-          tone: '',
-        })
-      } else if (isOwnAdvertiser) {
-        // 본인 광고주일 때만 에이전트 페르소나 적용
-        const parts: string[] = []
-        if (agentData.persona) parts.push(`분석 방향: ${agentData.persona}`)
-        if (agentData.tone) parts.push(`말투·보고 스타일: ${agentData.tone}`)
-        if (parts.length > 0) {
-          const nameLabel = agentData.agent_name ? `[${agentData.agent_name}] ` : ''
-          agentPersonaContext = `\n\n${nameLabel}[담당 매니저 에이전트 가이드]\n${parts.join('\n')}`
-        }
+    const agentData = agentRes.data
+    if (user && !agentData) {
+      // 매니저 에이전트 레코드 미존재 — 빈 레코드 생성 (await하지 않음, 병렬로 진행)
+      void supabase.from('manager_agents').insert({
+        user_id: user.id,
+        manager_name: advertiserName || '매니저',
+        agent_name: '',
+        persona: '',
+        tone: '',
+      })
+    } else if (agentData && isOwnAdvertiser) {
+      const parts: string[] = []
+      if (agentData.persona) parts.push(`분석 방향: ${agentData.persona}`)
+      if (agentData.tone) parts.push(`말투·보고 스타일: ${agentData.tone}`)
+      if (parts.length > 0) {
+        const nameLabel = agentData.agent_name ? `[${agentData.agent_name}] ` : ''
+        agentPersonaContext = `\n\n${nameLabel}[담당 매니저 에이전트 가이드]\n${parts.join('\n')}`
       }
     }
 
@@ -347,14 +342,15 @@ ${comparePreview}${historyContext}
 
 위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`
 
-    const geminiModel = genAI.getGenerativeModel({
-      model: 'gemini-3.1-pro-preview',
-      systemInstruction,
-      generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
-    })
-
-    const geminiResult = await geminiModel.generateContent(userPrompt)
-    const content = geminiResult.response.text()
+    const content = await withRetry(async () => {
+      const geminiModel = genAI.getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction,
+        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+      })
+      const geminiResult = await geminiModel.generateContent(userPrompt)
+      return geminiResult.response.text()
+    }, 'api/insight')
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
@@ -396,9 +392,11 @@ ${comparePreview}${historyContext}
     return Response.json(finalResult)
   } catch (error) {
     console.error('[api/insight] Error:', error)
+    const msg = error instanceof Error ? error.message : String(error)
+    const status = msg.includes('503') || msg.includes('429') ? 503 : 500
     return Response.json(
-      { error: `인사이트 생성 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}` },
-      { status: 500 }
+      { error: `인사이트 생성 실패: ${msg}. 잠시 후 다시 시도해주세요.` },
+      { status }
     )
   }
 }

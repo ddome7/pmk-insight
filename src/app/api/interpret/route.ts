@@ -1,201 +1,81 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import { createHash } from 'crypto'
+import { GEMINI_MODEL, genAI, withRetry } from '@/lib/gemini'
 
 export const maxDuration = 60
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+/**
+ * 컬럼 해석 결과 메모리 캐시.
+ * key: 헤더 + 샘플 첫 행의 SHA-256 (시트 구조 동일성 판별)
+ * value: 파싱된 columns JSON
+ *
+ * 서버리스 인스턴스 단위로만 유효 (인스턴스 재시작 시 휘발).
+ * 워밍된 컨테이너가 같은 시트로 재요청 받을 때 즉시 응답.
+ */
+type InterpretResult = { columns: Array<{ column: string; type: string; description: string }> }
+const interpretCache = new Map<string, InterpretResult>()
+const CACHE_MAX = 200 // 메모리 폭주 방지 — LRU 흉내 (오래된 키 제거)
 
-const SYSTEM_INSTRUCTION = `당신은 디지털 광고 퍼포먼스 마케팅 데이터 분석 전문가입니다.
-스프레드시트 헤더와 샘플 데이터를 보고 각 컬럼의 의미와 타입을 정확하게 해석하는 역할을 합니다.
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-[타입 분류 기준 — 반드시 준수]
-━━━━━━━━━━━━━━━━━━━━━━━━
-- 날짜: 날짜/시간 정보. 집계 시 필터링 기준으로 사용됨 (합산 불가)
-- 지표: 노출수·클릭수·전환수·구매수 등 정수형 카운팅 지표. 기간 합산 처리
-- 금액: 비용·매출·수익·ROAS 등 금액 또는 금액 환산 지표. 기간 합산 처리
-- 비율: CTR·CVR·ROAS율·전환율 등 비율/퍼센트 지표. 기간 평균 처리
-- 텍스트: 캠페인명·광고세트명·소재명·매체명 등 분류용 문자열. 집계 제외
-- 숫자: 위 어디에도 해당하지 않는 순수 수치. 기간 합산 처리
-
-⚠️ 타입 오분류 시 집계 오류 발생:
-- 비율(%) 컬럼을 지표로 분류하면 합산되어 수치가 왜곡됨 → 반드시 비율로 분류
-- 날짜 컬럼을 숫자로 분류하면 필터링 불가 → 반드시 날짜로 분류
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-[플랫폼별 주요 컬럼 사전]
-━━━━━━━━━━━━━━━━━━━━━━━━
-
-## 공통 / 날짜
-- 날짜, 일자, date, 기간, 주차, 월, 시간대 → 날짜
-
-## 공통 / 텍스트 분류
-- 캠페인, 캠페인명, campaign, campaign name → 텍스트
-- 광고세트, 광고세트명, ad set, adset → 텍스트
-- 광고그룹, 광고그룹명, ad group → 텍스트
-- 소재, 소재명, 광고명, ad name, creative → 텍스트
-- 매체, 플랫폼, media, channel → 텍스트
-- 목표, 최적화목표, 목표유형 → 텍스트
-- 광고유형, 상품유형, 소재유형 → 텍스트
-- 광고주, advertiser → 텍스트
-
-## Meta (Facebook/Instagram)
-지표:
-- 노출수, 노출, impressions → 지표
-- 도달수, 도달, reach → 지표
-- 클릭수, 링크클릭, 링크 클릭수, clicks, link clicks → 지표
-- 랜딩페이지뷰, landing page views → 지표
-- 장바구니담기, add to cart → 지표
-- 결제시작, initiate checkout → 지표
-- 구매수, 구매, purchases, conversions → 지표
-- 영상재생수, video views, 3초재생, thruplay → 지표
-- 메시지수, messages → 지표
-
-금액:
-- 광고비, 비용, 지출, spend, amount spent → 금액
-- 구매전환값, 구매 전환 값, conversion value, purchase value → 금액
-- ROAS, 광고수익률, roas → 금액 (합산 후 별도 계산)
-- CPC, 클릭당비용 → 금액
-- CPM → 금액
-- CPP, 구매당비용 → 금액
-- CPA → 금액
-
-비율:
-- CTR, 클릭률, 클릭율 → 비율
-- CVR, 전환율, 구매전환율 → 비율
-- 빈도, frequency → 비율
-- 조회율, view rate → 비율
-- 랜딩페이지뷰율 → 비율
-
-## Google Ads (구글)
-지표:
-- 노출수, impressions → 지표
-- 클릭수, clicks → 지표
-- 전환수, conversions → 지표
-- 전환값, conversion value → 금액
-- 상호작용수, interactions → 지표
-- 조회수, views → 지표
-
-금액:
-- 비용, cost → 금액
-- CPC, 평균CPC, avg CPC → 금액
-- CPV, 평균CPV → 금액
-- CPA, 전환당비용 → 금액
-- ROAS → 금액
-
-비율:
-- CTR, 클릭률 → 비율
-- 전환율, CVR → 비율
-- 조회율, 뷰율 → 비율
-- 상호작용률 → 비율
-
-## Naver (네이버 검색/디스플레이/성과형)
-지표:
-- 노출수 → 지표
-- 클릭수 → 지표
-- 전환수, 전환건수 → 지표
-
-금액:
-- 총비용, 광고비, 소진금액 → 금액
-- 전환매출, 전환매출액 → 금액
-- CPC, 클릭당비용 → 금액
-- CPA → 금액
-- ROAS → 금액
-
-비율:
-- 클릭률, CTR → 비율
-- 전환율, CVR → 비율
-
-## Kakao (카카오모먼트/카카오비즈보드)
-지표:
-- 노출수 → 지표
-- 클릭수 → 지표
-- 전환수 → 지표
-
-금액:
-- 광고비, 비용, 집행금액 → 금액
-- CPC → 금액
-- CPM → 금액
-- CPA → 금액
-- ROAS → 금액
-
-비율:
-- 클릭률, CTR → 비율
-- 전환율 → 비율
-
-## 취급고 / 매출 관련 (PMK 내부 지표)
-- 취급고, 취급액, 거래액, GMV → 금액
-- 수수료, 수수료수익, 매출 → 금액
-- 수수료율 → 비율
-- 달성률, 목표달성률 → 비율
-- 예산, 일예산, 월예산 → 금액
-- 예산집행률 → 비율
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-[응답 규칙]
-━━━━━━━━━━━━━━━━━━━━━━━━
-1. 반드시 순수 JSON만 출력하세요. 마크다운 코드블록(백틱 3개), 설명 텍스트 금지.
-2. column 값은 원본 헤더명 그대로 사용하세요. 임의 변경 금지.
-3. 샘플 데이터 값을 참고해 타입을 최종 확정하세요 (예: 값에 %가 있으면 비율).
-4. 알 수 없는 컬럼도 최대한 추론하여 분류하세요. unknown 응답 금지.`
-
-// 모델 우선순위: lite → flash → pro (503 발생 시 순서대로 fallback)
-const INTERPRET_MODELS = ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.1-pro-preview']
-
-async function generateWithFallback(prompt: string): Promise<string> {
-  for (const modelId of INTERPRET_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelId,
-        systemInstruction: SYSTEM_INSTRUCTION,
-        generationConfig: { temperature: 0.1 },
-      })
-      const result = await model.generateContent(prompt)
-      return result.response.text()
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      const is503 = msg.includes('503') || msg.includes('Service Unavailable') || msg.includes('high demand')
-      if (is503 && modelId !== INTERPRET_MODELS[INTERPRET_MODELS.length - 1]) {
-        console.warn(`[api/interpret] ${modelId} 503 → fallback 시도`)
-        continue
-      }
-      throw err
-    }
-  }
-  throw new Error('모든 모델 fallback 실패')
+function makeCacheKey(headers: string[], sampleRows: string[][]): string {
+  const h = createHash('sha256')
+  h.update(JSON.stringify(headers))
+  // 샘플 데이터의 첫 행 값까지 키에 포함 — 같은 헤더라도 % 등 값 단서가 다르면 다른 결과 가능
+  if (sampleRows.length > 0) h.update(JSON.stringify(sampleRows[0]))
+  return h.digest('hex')
 }
+
+const SYSTEM_INSTRUCTION = `당신은 디지털 광고 데이터 분석 전문가입니다. 스프레드시트 컬럼의 의미와 타입을 분류합니다.
+
+[타입 분류 — 6가지 중 정확히 하나]
+- 날짜: 날짜/시간. 필터 기준 (합산 불가).
+- 지표: 노출·클릭·전환·구매 등 정수 카운팅. 합산.
+- 금액: 비용·매출·ROAS·CPC·CPM·CPA 등 금액성 지표. 합산.
+- 비율: CTR·CVR·전환율·달성률·% 단위. 평균 처리.
+- 텍스트: 캠페인명·소재명·매체명 등 분류용 문자열.
+- 숫자: 위에 안 맞는 순수 수치. 합산.
+
+[중요 규칙]
+- 값에 % 포함 → 비율. 날짜 형식 → 날짜. 컬럼명·값 둘 다 보고 판단.
+- 모르면 가장 가까운 타입으로 추론. unknown 금지.
+- column 필드는 원본 헤더명 그대로.
+
+[응답]
+순수 JSON만. 마크다운 코드블록·설명문 금지.`
 
 export async function POST(request: Request) {
   try {
     const { headers, sampleRows } = await request.json()
 
     if (!headers || !sampleRows || !Array.isArray(headers) || !Array.isArray(sampleRows)) {
-      return Response.json(
-        { error: '헤더와 샘플 데이터가 필요합니다.' },
-        { status: 400 }
-      )
+      return Response.json({ error: '헤더와 샘플 데이터가 필요합니다.' }, { status: 400 })
+    }
+
+    // 캐시 조회
+    const cacheKey = makeCacheKey(headers, sampleRows)
+    const cached = interpretCache.get(cacheKey)
+    if (cached) {
+      return Response.json({ ...cached, _cache: 'hit' })
     }
 
     const dataPreview = [headers, ...sampleRows]
       .map((row: string[]) => row.join('\t'))
       .join('\n')
 
-    const prompt = `아래 스프레드시트의 각 컬럼을 해석해주세요.
+    const prompt = `아래 시트의 각 컬럼을 분류하세요.
 
-헤더와 샘플 데이터:
 ${dataPreview}
 
-반드시 아래 JSON 형식으로만 응답하세요:
-{
-  "columns": [
-    {
-      "column": "원본 헤더명 그대로",
-      "type": "날짜|지표|텍스트|숫자|비율|금액 중 정확히 하나",
-      "description": "이 컬럼의 의미 (한국어, 1~2문장)"
-    }
-  ]
-}`
+응답 JSON 형식:
+{"columns":[{"column":"원본 헤더명","type":"날짜|지표|텍스트|숫자|비율|금액","description":"의미 1~2문장"}]}`
 
-    const content = await generateWithFallback(prompt)
+    const content = await withRetry(async () => {
+      const model = genAI.getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: SYSTEM_INSTRUCTION,
+        generationConfig: { temperature: 0.1 },
+      })
+      const result = await model.generateContent(prompt)
+      return result.response.text()
+    }, 'api/interpret')
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
@@ -205,13 +85,23 @@ ${dataPreview}
       )
     }
 
-    const parsed = JSON.parse(jsonMatch[0])
+    const parsed = JSON.parse(jsonMatch[0]) as InterpretResult
+
+    // 캐시 저장 (LRU 흉내: 초과 시 가장 오래된 키 제거)
+    if (interpretCache.size >= CACHE_MAX) {
+      const oldestKey = interpretCache.keys().next().value
+      if (oldestKey) interpretCache.delete(oldestKey)
+    }
+    interpretCache.set(cacheKey, parsed)
+
     return Response.json(parsed)
   } catch (error) {
     console.error('[api/interpret] Error:', error)
+    const msg = error instanceof Error ? error.message : String(error)
+    const status = msg.includes('503') || msg.includes('429') ? 503 : 500
     return Response.json(
-      { error: `컬럼 해석 중 오류가 발생했습니다: ${error instanceof Error ? error.message : String(error)}` },
-      { status: 500 }
+      { error: `컬럼 해석 실패: ${msg}. 잠시 후 다시 시도해주세요.` },
+      { status }
     )
   }
 }

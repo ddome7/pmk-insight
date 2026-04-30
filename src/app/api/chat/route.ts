@@ -1,9 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
+import { GEMINI_MODEL, genAI, withRetry } from '@/lib/gemini'
 
 export const maxDuration = 60
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -40,11 +38,6 @@ ${insightContext ? `[AI 인사이트 요약]\n${insightContext}` : ''}
 - 데이터에 없는 내용은 추측하지 마세요.
 - 간결하게 한국어로 답변하세요.`
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: systemPrompt,
-    })
-
     // Gemini history: 마지막 메시지 제외한 이전 대화
     const history = (messages as ChatMessage[]).slice(0, -1).map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
@@ -53,13 +46,24 @@ ${insightContext ? `[AI 인사이트 요약]\n${insightContext}` : ''}
 
     const lastMessage = (messages as ChatMessage[]).at(-1)!
 
-    const chat = model.startChat({ history })
-    const result = await chat.sendMessage(lastMessage.content)
-    const reply = result.response.text()
+    const reply = await withRetry(async () => {
+      const model = genAI.getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: systemPrompt,
+      })
+      const chat = model.startChat({ history })
+      const result = await chat.sendMessage(lastMessage.content)
+      return result.response.text()
+    }, 'api/chat')
 
     return Response.json({ reply })
   } catch (error) {
     console.error('[api/chat] Error:', error)
-    return Response.json({ error: String(error) }, { status: 500 })
+    const msg = error instanceof Error ? error.message : String(error)
+    const status = msg.includes('503') || msg.includes('429') ? 503 : 500
+    return Response.json(
+      { error: `채팅 응답 실패: ${msg}. 잠시 후 다시 시도해주세요.` },
+      { status }
+    )
   }
 }
