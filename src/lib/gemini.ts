@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
  * 전체 API에서 사용하는 Gemini 모델 단일 고정.
  * fallback 체인 사용 금지 — 응답 품질 일관성 + 디버깅 단순성 우선.
  */
-export const GEMINI_MODEL = 'gemini-3.1-pro-preview'
+export const GEMINI_MODEL = 'gemini-2.5-pro'
 
 if (!process.env.GEMINI_API_KEY) {
   // 빌드 타임에는 미설정 가능. 런타임 첫 호출 시 실패하므로 경고만.
