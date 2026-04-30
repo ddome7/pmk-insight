@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { GEMINI_MODEL, genAI, withRetry } from '@/lib/gemini'
+import { GEMINI_MODEL, genAI, textGenerationConfig, withRetry } from '@/lib/gemini'
 
 export const maxDuration = 60
 
@@ -50,6 +50,7 @@ ${insightContext ? `[AI 인사이트 요약]\n${insightContext}` : ''}
       const model = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction: systemPrompt,
+        generationConfig: textGenerationConfig(),
       })
       const chat = model.startChat({ history })
       const result = await chat.sendMessage(lastMessage.content)

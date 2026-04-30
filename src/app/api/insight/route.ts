@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { GEMINI_MODEL, genAI, withRetry } from '@/lib/gemini'
+import { GEMINI_MODEL, genAI, jsonGenerationConfig, withRetry } from '@/lib/gemini'
 
 export const maxDuration = 60
 
@@ -343,19 +343,38 @@ ${comparePreview}${historyContext}
 위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`
 
     // insight는 retry sleep 없이 1회 시도 (sleep이 Vercel 타임아웃 악화)
-    const content = await withRetry(async () => {
+    // 응답 원본 + finishReason까지 함께 캡처해 파싱 실패 진단을 가능하게 함.
+    const { content, finishReason, usage } = await withRetry(async () => {
       const geminiModel = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction,
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2048,
-          responseMimeType: 'application/json',
-        },
+        generationConfig: jsonGenerationConfig({ maxOutputTokens: 4096 }),
       })
       const geminiResult = await geminiModel.generateContent(userPrompt)
-      return geminiResult.response.text()
+      const resp = geminiResult.response
+      return {
+        content: resp.text(),
+        finishReason: resp.candidates?.[0]?.finishReason,
+        usage: resp.usageMetadata,
+      }
     }, 'api/insight', 0)
+
+    // 진단용 임시 로깅 — Vercel Logs 에서 실제 응답 원문/메타 확인.
+    // 안정화 후 제거 예정.
+    console.error('[api/insight] DEBUG finishReason=%s usage=%o', finishReason, usage)
+    console.error('[api/insight] DEBUG content (first 1000 chars):', content?.slice(0, 1000))
+    console.error('[api/insight] DEBUG content length:', content?.length)
+
+    // MAX_TOKENS로 잘린 응답이면 파싱 시도조차 무의미 — 명확한 에러 반환.
+    if (finishReason === 'MAX_TOKENS') {
+      return Response.json(
+        {
+          error: 'AI 응답이 토큰 한도에 걸려 잘렸습니다. 잠시 후 다시 시도해주세요.',
+          _debug: { finishReason, usage },
+        },
+        { status: 500 }
+      )
+    }
 
     // responseMimeType: 'application/json' 적용으로 순수 JSON 응답 보장
     // 안전망: 마크다운 코드블록이 포함될 경우 제거 후 파싱
@@ -366,7 +385,14 @@ ${comparePreview}${historyContext}
       const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
       const jsonMatch = stripped.match(/\{[\s\S]*\}/)
       if (!jsonMatch) {
-        return Response.json({ error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' }, { status: 500 })
+        console.error('[api/insight] JSON 파싱 실패 — 원본 응답 전체:', content)
+        return Response.json(
+          {
+            error: 'AI 응답에서 JSON을 파싱할 수 없습니다.',
+            _debug: { finishReason, usage, contentPreview: content?.slice(0, 500) },
+          },
+          { status: 500 }
+        )
       }
       parsed = JSON.parse(jsonMatch[0])
     }

@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { GEMINI_MODEL, genAI, withRetry } from '@/lib/gemini'
+import { GEMINI_MODEL, genAI, jsonGenerationConfig, withRetry } from '@/lib/gemini'
 
 export const maxDuration = 60
 
@@ -68,18 +68,35 @@ ${dataPreview}
 {"columns":[{"column":"원본 헤더명","type":"날짜|지표|텍스트|숫자|비율|금액","description":"의미 1~2문장"}]}`
 
     // interpret는 retry sleep 없이 1회 시도 (sleep이 Vercel 타임아웃 악화)
-    const content = await withRetry(async () => {
+    // 응답 원본 + finishReason까지 함께 캡처해 파싱 실패 진단을 가능하게 함.
+    const { content, finishReason, usage } = await withRetry(async () => {
       const model = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction: SYSTEM_INSTRUCTION,
-        generationConfig: {
-          temperature: 0.1,
-          responseMimeType: 'application/json',
-        },
+        generationConfig: jsonGenerationConfig({ temperature: 0.1, maxOutputTokens: 4096 }),
       })
       const result = await model.generateContent(prompt)
-      return result.response.text()
+      const resp = result.response
+      return {
+        content: resp.text(),
+        finishReason: resp.candidates?.[0]?.finishReason,
+        usage: resp.usageMetadata,
+      }
     }, 'api/interpret', 0)
+
+    // 진단용 임시 로깅 — 안정화 후 제거 예정.
+    console.error('[api/interpret] DEBUG finishReason=%s usage=%o', finishReason, usage)
+    console.error('[api/interpret] DEBUG content (first 800 chars):', content?.slice(0, 800))
+
+    if (finishReason === 'MAX_TOKENS') {
+      return Response.json(
+        {
+          error: 'AI 응답이 토큰 한도에 걸려 잘렸습니다. 잠시 후 다시 시도해주세요.',
+          _debug: { finishReason, usage },
+        },
+        { status: 500 }
+      )
+    }
 
     // responseMimeType: 'application/json' 적용으로 순수 JSON 응답 보장
     // 안전망: 마크다운 코드블록이 포함될 경우 제거 후 파싱
@@ -90,8 +107,12 @@ ${dataPreview}
       const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
       const jsonMatch = stripped.match(/\{[\s\S]*\}/)
       if (!jsonMatch) {
+        console.error('[api/interpret] JSON 파싱 실패 — 원본 응답 전체:', content)
         return Response.json(
-          { error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' },
+          {
+            error: 'AI 응답에서 JSON을 파싱할 수 없습니다.',
+            _debug: { finishReason, usage, contentPreview: content?.slice(0, 500) },
+          },
           { status: 500 }
         )
       }
