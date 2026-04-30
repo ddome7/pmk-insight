@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@/lib/supabase/server'
 
+export const maxDuration = 60
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 interface ChatMessage {
@@ -39,7 +41,7 @@ ${insightContext ? `[AI 인사이트 요약]\n${insightContext}` : ''}
 - 간결하게 한국어로 답변하세요.`
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.1-pro-preview',
+      model: 'gemini-2.5-flash',
       systemInstruction: systemPrompt,
     })
 

@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
+export const maxDuration = 60
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 const SYSTEM_INSTRUCTION = `당신은 디지털 광고 퍼포먼스 마케팅 데이터 분석 전문가입니다.
@@ -152,7 +154,7 @@ export async function POST(request: Request) {
       .join('\n')
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3.1-pro-preview',
+      model: 'gemini-2.5-flash',
       systemInstruction: SYSTEM_INSTRUCTION,
       generationConfig: { temperature: 0.1 },
     })
