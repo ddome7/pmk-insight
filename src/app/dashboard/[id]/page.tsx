@@ -321,6 +321,7 @@ export default function AdvertiserInsightPage({
     setStep('fetching')
     setSheetError('')
     setInsightResult(null)
+    setColumnInterpretation(null) // 이전 해석 결과 리셋 — race condition 방지
     setChatMessages([])
 
     // Step 1: Fetch sheet data
@@ -415,13 +416,7 @@ export default function AdvertiserInsightPage({
     }
   }, [step, insightResult])
 
-  // When fetchSheetData completes during step flow
-  useEffect(() => {
-    if (step === 'fetching' && !fetchingSheet && sheetData) {
-      setStep('interpreting')
-      interpretColumns()
-    }
-  }, [step, fetchingSheet, sheetData, interpretColumns])
+  // (중복 useEffect 제거 — 398번 effect와 동일 조건이라 interpretColumns 이중 호출 방지)
 
   if (loading) {
     return (
