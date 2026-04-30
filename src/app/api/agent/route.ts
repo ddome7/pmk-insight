@@ -25,7 +25,7 @@ export async function GET() {
       .from('manager_agents')
       .select('*')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()  // .single() → .maybeSingle(): 0건을 에러로 처리하지 않음
 
     return Response.json({ agent: data || null })
   } catch (error) {

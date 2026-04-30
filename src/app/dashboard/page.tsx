@@ -158,7 +158,7 @@ export default function DashboardPage() {
         agent_name: agentNameDraft,
         persona: agentPersonaDraft,
         tone: agentToneDraft,
-        manager_name: user?.email || '매니저',
+        manager_name: '매니저',  // 고정값 — auto-create와 동일한 key로 같은 row upsert
       }),
     })
     if (res.ok) {

@@ -229,11 +229,9 @@ export async function POST(request: Request) {
             .from('manager_agents')
             .select('id, agent_name, persona, tone')
             .eq('user_id', user.id)
-            .single()
+            .maybeSingle()  // .single() → .maybeSingle(): 0건을 에러로 처리하지 않음
         : Promise.resolve({ data: null as { id: string; agent_name: string; persona: string; tone: string } | null }),
     ])
-
-    const isOwnAdvertiser = !!(advRes.data && user && advRes.data.user_id === user.id)
 
     const historyData = historyRes.data
     if (historyData && historyData.length > 0) {
@@ -242,15 +240,19 @@ export async function POST(request: Request) {
 
     const agentData = agentRes.data
     if (user && !agentData) {
-      // 매니저 에이전트 레코드 미존재 — 빈 레코드 생성 (await하지 않음, 병렬로 진행)
-      void supabase.from('manager_agents').insert({
+      // 매니저 에이전트 레코드 미존재 — 빈 레코드 upsert
+      // manager_name을 '매니저'로 고정 (이전 버그: advertiserName을 매니저명으로 저장하던 것 수정)
+      supabase.from('manager_agents').upsert({
         user_id: user.id,
-        manager_name: advertiserName || '매니저',
+        manager_name: '매니저',
         agent_name: '',
         persona: '',
         tone: '',
-      })
-    } else if (agentData && isOwnAdvertiser) {
+      }, { onConflict: 'user_id,manager_name', ignoreDuplicates: true })
+        .then(({ error }) => { if (error) console.error('[agent autocreate]', error.message) })
+    } else if (agentData) {
+      // isOwnAdvertiser 게이트 제거 — 매니저 에이전트는 로그인한 매니저 본인의 분석 시각이므로
+      // 어느 광고주를 열든 항상 적용
       const parts: string[] = []
       if (agentData.persona) parts.push(`분석 방향: ${agentData.persona}`)
       if (agentData.tone) parts.push(`말투·보고 스타일: ${agentData.tone}`)
