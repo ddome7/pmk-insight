@@ -81,9 +81,11 @@ export default function AdvertiserInsightPage({
   const [showHistory, setShowHistory] = useState(false)
   const [copiedReport, setCopiedReport] = useState(false)
 
-  // 시트 URL 수정
+  // 광고주 정보 수정
   const [editingSheetUrl, setEditingSheetUrl] = useState(false)
   const [sheetUrlInput, setSheetUrlInput] = useState('')
+  const [managerNameInput, setManagerNameInput] = useState('')
+  const [advertiserNameInput, setAdvertiserNameInput] = useState('')
   const [sheetUrlError, setSheetUrlError] = useState('')
   const [savingSheetUrl, setSavingSheetUrl] = useState(false)
 
@@ -378,6 +380,8 @@ export default function AdvertiserInsightPage({
   const openSheetUrlEditor = () => {
     if (!advertiser) return
     setSheetUrlInput(advertiser.sheet_url)
+    setManagerNameInput(advertiser.manager_name)
+    setAdvertiserNameInput(advertiser.advertiser_name)
     setSheetUrlError('')
     setEditingSheetUrl(true)
   }
@@ -390,6 +394,17 @@ export default function AdvertiserInsightPage({
   const saveSheetUrl = async () => {
     if (!advertiser) return
     const trimmed = sheetUrlInput.trim()
+    const managerTrimmed = managerNameInput.trim()
+    const advertiserTrimmed = advertiserNameInput.trim()
+
+    if (!advertiserTrimmed) {
+      setSheetUrlError('광고주명을 입력해주세요.')
+      return
+    }
+    if (!managerTrimmed) {
+      setSheetUrlError('담당자명을 입력해주세요.')
+      return
+    }
     if (!trimmed) {
       setSheetUrlError('URL을 입력해주세요.')
       return
@@ -408,7 +423,11 @@ export default function AdvertiserInsightPage({
 
     const { error } = await supabase
       .from('advertisers')
-      .update({ sheet_url: trimmed })
+      .update({
+        sheet_url: trimmed,
+        manager_name: managerTrimmed,
+        advertiser_name: advertiserTrimmed,
+      })
       .eq('id', advertiser.id)
 
     setSavingSheetUrl(false)
@@ -419,7 +438,12 @@ export default function AdvertiserInsightPage({
     }
 
     // 페이지 새로고침 없이 state 업데이트
-    setAdvertiser({ ...advertiser, sheet_url: trimmed })
+    setAdvertiser({
+      ...advertiser,
+      sheet_url: trimmed,
+      manager_name: managerTrimmed,
+      advertiser_name: advertiserTrimmed,
+    })
     // URL이 바뀌었으니 캐시된 시트 데이터/해석/인사이트 모두 폐기
     setSheetData(null)
     setColumnInterpretation(null)
@@ -568,30 +592,71 @@ export default function AdvertiserInsightPage({
               className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl p-6"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-white">시트 URL 수정</h3>
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-bold text-white">광고주 정보 수정</h3>
                 <button
                   onClick={closeSheetUrlEditor}
                   className="text-gray-500 hover:text-white text-sm"
                   aria-label="닫기"
                 >✕</button>
               </div>
-              <p className="text-xs text-gray-500 mb-3">
-                Google 스프레드시트 URL을 입력하세요. 특정 탭(<span className="text-gray-300 font-mono">#gid=…</span>)이 포함된 URL이면 해당 탭을 읽습니다.
-              </p>
-              <input
-                type="url"
-                value={sheetUrlInput}
-                onChange={(e) => setSheetUrlInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !savingSheetUrl) { e.preventDefault(); saveSheetUrl() }
-                  if (e.key === 'Escape') { e.preventDefault(); closeSheetUrlEditor() }
-                }}
-                placeholder="https://docs.google.com/spreadsheets/d/..../edit#gid=0"
-                disabled={savingSheetUrl}
-                autoFocus
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              />
+
+              {/* 광고주명 + 담당자명 */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-400 block mb-1.5">광고주명 <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={advertiserNameInput}
+                    onChange={(e) => setAdvertiserNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !savingSheetUrl) { e.preventDefault(); saveSheetUrl() }
+                      if (e.key === 'Escape') { e.preventDefault(); closeSheetUrlEditor() }
+                    }}
+                    placeholder="예) ABC 브랜드"
+                    disabled={savingSheetUrl}
+                    autoFocus
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-400 block mb-1.5">담당자명 <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={managerNameInput}
+                    onChange={(e) => setManagerNameInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !savingSheetUrl) { e.preventDefault(); saveSheetUrl() }
+                      if (e.key === 'Escape') { e.preventDefault(); closeSheetUrlEditor() }
+                    }}
+                    placeholder="예) 홍길동"
+                    disabled={savingSheetUrl}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                </div>
+              </div>
+
+              {/* 시트 URL */}
+              <div className="mb-1">
+                <label className="text-xs font-medium text-gray-400 block mb-1.5">
+                  Google 스프레드시트 URL <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-gray-600 mb-2">
+                  특정 탭(<span className="text-gray-400 font-mono">#gid=…</span>)이 포함된 URL이면 해당 탭을 읽습니다.
+                </p>
+                <input
+                  type="url"
+                  value={sheetUrlInput}
+                  onChange={(e) => setSheetUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !savingSheetUrl) { e.preventDefault(); saveSheetUrl() }
+                    if (e.key === 'Escape') { e.preventDefault(); closeSheetUrlEditor() }
+                  }}
+                  placeholder="https://docs.google.com/spreadsheets/d/..../edit#gid=0"
+                  disabled={savingSheetUrl}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                />
+              </div>
               {sheetUrlError && (
                 <p className="text-red-400 text-xs mt-2 break-all">{sheetUrlError}</p>
               )}
