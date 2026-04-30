@@ -39,7 +39,7 @@ ${insightContext ? `[AI 인사이트 요약]\n${insightContext}` : ''}
 - 간결하게 한국어로 답변하세요.`
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.0-flash-pro',
       systemInstruction: systemPrompt,
     })
 
