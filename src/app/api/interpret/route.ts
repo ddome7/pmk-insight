@@ -74,23 +74,29 @@ ${dataPreview}
         systemInstruction: SYSTEM_INSTRUCTION,
         generationConfig: {
           temperature: 0.1,
+          responseMimeType: 'application/json',
         },
       })
       const result = await model.generateContent(prompt)
       return result.response.text()
     }, 'api/interpret', 0)
 
-    // 마크다운 코드블록 제거 후 JSON 추출
-    const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return Response.json(
-        { error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' },
-        { status: 500 }
-      )
+    // responseMimeType: 'application/json' 적용으로 순수 JSON 응답 보장
+    // 안전망: 마크다운 코드블록이 포함될 경우 제거 후 파싱
+    let parsed: InterpretResult
+    try {
+      parsed = JSON.parse(content) as InterpretResult
+    } catch {
+      const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        return Response.json(
+          { error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' },
+          { status: 500 }
+        )
+      }
+      parsed = JSON.parse(jsonMatch[0]) as InterpretResult
     }
-
-    const parsed = JSON.parse(jsonMatch[0]) as InterpretResult
 
     // 캐시 저장 (LRU 흉내: 초과 시 가장 오래된 키 제거)
     if (interpretCache.size >= CACHE_MAX) {

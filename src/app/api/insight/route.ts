@@ -350,20 +350,26 @@ ${comparePreview}${historyContext}
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
         },
       })
       const geminiResult = await geminiModel.generateContent(userPrompt)
       return geminiResult.response.text()
     }, 'api/insight', 0)
 
-    // 마크다운 코드블록 제거 후 JSON 추출
-    const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
-    const jsonMatch = stripped.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return Response.json({ error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' }, { status: 500 })
+    // responseMimeType: 'application/json' 적용으로 순수 JSON 응답 보장
+    // 안전망: 마크다운 코드블록이 포함될 경우 제거 후 파싱
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(content)
+    } catch {
+      const stripped = content.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim()
+      const jsonMatch = stripped.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) {
+        return Response.json({ error: 'AI 응답에서 JSON을 파싱할 수 없습니다.' }, { status: 500 })
+      }
+      parsed = JSON.parse(jsonMatch[0])
     }
-
-    const parsed = JSON.parse(jsonMatch[0])
 
     if (!Array.isArray(parsed.insights) || !Array.isArray(parsed.nextSteps)) {
       return Response.json({ error: 'AI 응답 형식이 올바르지 않습니다.' }, { status: 500 })
