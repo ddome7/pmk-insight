@@ -342,15 +342,16 @@ ${comparePreview}${historyContext}
 
 위 집계 요약과 원본 데이터를 참고하여 기준 기간과 비교 기간을 비교 분석하고, JSON 형식으로 인사이트/넥스트스텝/보고서를 작성해주세요.`
 
+    // insight는 retry sleep 없이 1회 시도 (sleep이 Vercel 타임아웃 악화)
     const content = await withRetry(async () => {
       const geminiModel = genAI.getGenerativeModel({
         model: GEMINI_MODEL,
         systemInstruction,
-        generationConfig: { temperature: 0.2, maxOutputTokens: 4096 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
       })
       const geminiResult = await geminiModel.generateContent(userPrompt)
       return geminiResult.response.text()
-    }, 'api/insight')
+    }, 'api/insight', 0)
 
     const jsonMatch = content.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {

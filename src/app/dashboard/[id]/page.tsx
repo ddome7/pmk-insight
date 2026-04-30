@@ -295,6 +295,9 @@ export default function AdvertiserInsightPage({
       })
 
       if (!response.ok) {
+        if (response.status === 504 || response.status === 524) {
+          throw new Error('응답 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.')
+        }
         const errData = await response.json().catch(() => ({}))
         throw new Error(errData?.error || '인사이트 생성에 실패했습니다.')
       }
