@@ -789,7 +789,7 @@ export default function AdvertiserInsightPage({
                         </span>
                         <div>
                           <p className="text-sm font-semibold text-white leading-snug mb-2">{insight.title}</p>
-                          <p className="text-sm text-gray-400 leading-relaxed">{insight.description}</p>
+                          <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-wrap">{insight.description}</p>
                         </div>
                       </div>
                     </div>
@@ -847,72 +847,73 @@ export default function AdvertiserInsightPage({
               </section>
             )}
 
-            {/* History */}
-            {insightHistory.length > 0 && (
-              <section className="pt-6 border-t border-gray-800">
-                <button
-                  onClick={() => setShowHistory(v => !v)}
-                  className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-white transition-colors w-full text-left mb-1"
-                >
-                  <span>{showHistory ? '▾' : '▸'}</span>
-                  인사이트 히스토리
-                  <span className="text-xs font-normal text-gray-600 ml-1">총 {insightHistory.length}회</span>
-                </button>
-                {showHistory && (
-                  <div className="mt-3 space-y-2">
-                    {insightHistory.map((entry) => {
-                      const isExpanded = expandedHistoryId === entry.id
-                      const date = new Date(entry.created_at)
-                      const dateLabel = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
-                      return (
-                        <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-                          <div className="flex items-center">
-                            <button
-                              onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
-                              className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-gray-800/60 transition-colors text-left"
-                            >
-                              <span className="text-xs text-gray-600 flex-shrink-0">{dateLabel}</span>
-                              <span className="text-xs text-gray-400 flex-shrink-0">{entry.analysis_start} ~ {entry.analysis_end}</span>
-                              {entry.compare_start && (
-                                <span className="text-xs text-gray-700 flex-shrink-0">비교 {entry.compare_start} ~ {entry.compare_end}</span>
-                              )}
-                              <span className="ml-auto text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
-                                {entry.result.insights?.length || 0}개
-                              </span>
-                              <span className="text-gray-700 text-xs">{isExpanded ? '▲' : '▼'}</span>
-                            </button>
-                            <button
-                              onClick={() => deleteHistoryEntry(entry.id)}
-                              className="px-3 py-3 text-gray-700 hover:text-red-400 transition-colors text-xs"
-                              title="삭제"
-                            >✕</button>
-                          </div>
-                          {isExpanded && (
-                            <div className="px-4 pb-4 pt-3 border-t border-gray-800 space-y-2">
-                              {entry.result.insights?.map((ins, i) => (
-                                <div key={i} className="flex gap-2">
-                                  <span className="flex-shrink-0 text-xs text-blue-500 font-bold w-4">{i+1}.</span>
-                                  <div>
-                                    <p className="text-xs font-semibold text-gray-300">{ins.title}</p>
-                                    {ins.description && <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{ins.description}</p>}
-                                  </div>
-                                </div>
-                              ))}
-                              {entry.result.report && (
-                                <div className="bg-gray-800/60 rounded-lg px-3 py-2.5 mt-1">
-                                  <p className="text-xs text-gray-500 leading-relaxed">{entry.result.report}</p>
-                                </div>
-                              )}
+          </div>
+        )}
+
+        {/* History — insightResult 여부와 무관하게 항상 표시 */}
+        {insightHistory.length > 0 && (
+          <section className={`pt-6 border-t border-gray-800${insightResult ? ' mt-8' : ''}`}>
+            <button
+              onClick={() => setShowHistory(v => !v)}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-400 hover:text-white transition-colors w-full text-left mb-1"
+            >
+              <span>{showHistory ? '▾' : '▸'}</span>
+              인사이트 히스토리
+              <span className="text-xs font-normal text-gray-600 ml-1">총 {insightHistory.length}회</span>
+            </button>
+            {showHistory && (
+              <div className="mt-3 space-y-2">
+                {insightHistory.map((entry) => {
+                  const isExpanded = expandedHistoryId === entry.id
+                  const date = new Date(entry.created_at)
+                  const dateLabel = `${date.getFullYear()}.${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`
+                  return (
+                    <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => setExpandedHistoryId(isExpanded ? null : entry.id)}
+                          className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-gray-800/60 transition-colors text-left"
+                        >
+                          <span className="text-xs text-gray-600 flex-shrink-0">{dateLabel}</span>
+                          <span className="text-xs text-gray-400 flex-shrink-0">{entry.analysis_start} ~ {entry.analysis_end}</span>
+                          {entry.compare_start && (
+                            <span className="text-xs text-gray-700 flex-shrink-0">비교 {entry.compare_start} ~ {entry.compare_end}</span>
+                          )}
+                          <span className="ml-auto text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full flex-shrink-0">
+                            {entry.result.insights?.length || 0}개
+                          </span>
+                          <span className="text-gray-700 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                        </button>
+                        <button
+                          onClick={() => deleteHistoryEntry(entry.id)}
+                          className="px-3 py-3 text-gray-700 hover:text-red-400 transition-colors text-xs"
+                          title="삭제"
+                        >✕</button>
+                      </div>
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-3 border-t border-gray-800 space-y-2">
+                          {entry.result.insights?.map((ins, i) => (
+                            <div key={i} className="flex gap-2">
+                              <span className="flex-shrink-0 text-xs text-blue-500 font-bold w-4">{i+1}.</span>
+                              <div>
+                                <p className="text-xs font-semibold text-gray-300">{ins.title}</p>
+                                {ins.description && <p className="text-xs text-gray-500 mt-0.5 leading-relaxed whitespace-pre-wrap">{ins.description}</p>}
+                              </div>
+                            </div>
+                          ))}
+                          {entry.result.report && (
+                            <div className="bg-gray-800/60 rounded-lg px-3 py-2.5 mt-1">
+                              <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap">{entry.result.report}</p>
                             </div>
                           )}
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </section>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             )}
-          </div>
+          </section>
         )}
 
       </main>
